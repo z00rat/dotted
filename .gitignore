@@ -1,0 +1,10 @@
+/target/
+
+*.mutants
+**/*.rs.bk
+*.swp
+*~
+
+.env
+.env.*
+!.env.example

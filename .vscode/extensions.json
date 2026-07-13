@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "tamasfe.even-better-toml",
+    "rust-lang.rust",
+    "rust-lang.rust-analyzer",
+    "usernamehw.errorlens"
+  ]
+}

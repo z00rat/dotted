@@ -1,0 +1,15 @@
+{
+  // Run clippy instead of cargo check on save
+  "rust-analyzer.check.command": "clippy",
+  // Enable all clippy features during check
+  "rust-analyzer.check.allTargets": true,
+  // Show implicit lifetimes, parameter names, and type hints inline
+  "rust-analyzer.inlayHints.lifetimeElisionHints.enable": "skip_trivial",
+  "rust-analyzer.inlayHints.parameterHints.enable": true,
+  "rust-analyzer.inlayHints.typeHints.enable": true,
+  // Auto-format via rustfmt on every save
+  "editor.formatOnSave": true,
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+  }
+}
