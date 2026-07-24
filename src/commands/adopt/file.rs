@@ -131,7 +131,7 @@ pub fn run(runtime: &Runtime, artifact_id: &str, path: Option<PathBuf>) -> Resul
     fs::copy(&path, &destination)?;
     ensure_about_entry(runtime, repo, artifact)?;
     println!(
-        "adopted {} into {}",
+        "Adopted {} into {}",
         style(&path.to_string_lossy(), "32", runtime),
         style(artifact_id, "36;1", runtime)
     );

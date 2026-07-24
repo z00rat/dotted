@@ -65,7 +65,7 @@ pub fn add(runtime: &Runtime, path: Option<&Path>) -> Result<()> {
     file.ignore.file.sort();
     file.ignore.folder.sort();
     crate::types::write_toml(&settings, &file)?;
-    println!("ignored {}", style(&value, "32", runtime));
+    println!("Ignored {}", style(&value, "32", runtime));
     Ok(())
 }
 
@@ -107,7 +107,7 @@ pub fn remove(runtime: &Runtime, path: Option<&Path>) -> Result<()> {
 
         if removed {
             crate::types::write_toml(&settings, &file)?;
-            println!("Removed ignore entry: {}", style(val, "33", runtime));
+            println!("Removed ignore entry {}", style(val, "33", runtime));
         } else {
             bail!("Ignore entry '{val}' not found in settings.");
         }
@@ -164,7 +164,7 @@ pub fn remove(runtime: &Runtime, path: Option<&Path>) -> Result<()> {
         }
 
         crate::types::write_toml(&settings, &file)?;
-        println!("Removed ignore entry: {}", style(&val, "33", runtime));
+        println!("Removed ignore entry {}", style(&val, "33", runtime));
     }
 
     Ok(())

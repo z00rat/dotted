@@ -41,6 +41,6 @@ pub fn run(runtime: &Runtime, name: &str, git_url: &str) -> Result<()> {
     } else {
         crate::utils::run_git(&runtime.dotted_dir, ["clone", git_url, name])?;
     }
-    println!("added repo {name}");
+    println!("Added repo {}", crate::utils::style(name, "32", runtime));
     Ok(())
 }

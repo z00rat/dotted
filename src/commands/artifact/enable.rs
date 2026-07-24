@@ -40,6 +40,6 @@ pub fn run(runtime: &Runtime, artifact_id: &str) -> Result<()> {
     file.artifacts.enable = enable.into_iter().collect();
     file.artifacts.disable = disable.into_iter().collect();
     crate::types::write_toml(&path, &file)?;
-    println!("enabled {}", style(artifact_id, "32;1", runtime));
+    println!("Enabled {}", style(artifact_id, "32;1", runtime));
     Ok(())
 }

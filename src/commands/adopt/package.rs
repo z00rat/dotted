@@ -83,13 +83,13 @@ pub fn run(
     ensure_about_entry(runtime, repo, artifact)?;
     if package_type == "flatpak" {
         println!(
-            "added flatpak package {} to {} [bin].toml",
+            "Added flatpak package {} to {} [bin].toml",
             style(&package_name, "32", runtime),
             style(artifact_id, "36;1", runtime)
         );
     } else {
         println!(
-            "added native ({}) package {} to {} [bin].toml",
+            "Added native ({}) package {} to {} [bin].toml",
             package_type,
             style(&package_name, "32", runtime),
             style(artifact_id, "36;1", runtime)

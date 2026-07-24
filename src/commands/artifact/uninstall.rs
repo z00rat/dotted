@@ -100,7 +100,7 @@ fn perform_removal(runtime: &Runtime, target_plan: &Plan) -> Result<()> {
             } else {
                 fs::remove_file(&path)?;
             }
-            println!("removed {}", display_path.display());
+            println!("Removed {}", display_path.display());
         }
     }
     Ok(())

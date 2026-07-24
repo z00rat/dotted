@@ -214,7 +214,7 @@ fn artifact_uninstall_deletes_files_and_disables_artifact() {
         .args(["artifact", "uninstall", "/git", "--yes"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("disabled /git"));
+        .stdout(predicate::str::contains("Disabled /git"));
 
     assert!(!fixture.home.join(".config/git/config").exists());
     assert!(fixture.home.join(".cache/dotted/backups").exists());
@@ -287,7 +287,7 @@ fn adopt_file_and_package_updates_artifact_manifest() {
         .args(["adopt", "file", "/git", file_to_adopt.to_str().unwrap()])
         .assert()
         .success()
-        .stdout(predicate::str::contains("adopted"));
+        .stdout(predicate::str::contains("Adopted"));
 
     assert!(fixture.meta.join("[artifacts]/git/home/.bashrc").exists());
 
@@ -304,7 +304,7 @@ fn adopt_file_and_package_updates_artifact_manifest() {
         .assert()
         .success()
         .stdout(predicate::str::contains(
-            "added native (archlinux) package starship",
+            "Added native (archlinux) package starship",
         ));
 
     let bin_toml = fs::read_to_string(fixture.meta.join("[artifacts]/git/[bin].toml")).unwrap();
@@ -396,7 +396,7 @@ fn artifact_create_scaffolds_directory_structure() {
         .args(["artifact", "create", "zsh"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("created /zsh"));
+        .stdout(predicate::str::contains("Created /zsh"));
 
     assert!(fixture.meta.join("[artifacts]/zsh").exists());
 }
@@ -455,7 +455,7 @@ fn workspace_init_and_cd_manage_local_directory() {
     ]);
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("initialized ."));
+        .stdout(predicate::str::contains("initialized "));
 
     assert!(dotted_dir.join("[dotted].toml").exists());
     assert!(dotted_dir.join("[artifacts]").exists());
@@ -487,10 +487,10 @@ fn backup_restore_reverts_file_to_previous_snapshot() {
     let backups_dir = fixture.home.join(".cache/dotted/backups");
     let mut entries: Vec<_> = fs::read_dir(&backups_dir)
         .unwrap()
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter(|e| e.path().is_dir())
         .collect();
-    entries.sort_by_key(|e| e.file_name());
+    entries.sort_by_key(fs::DirEntry::file_name);
 
     if let Some(latest) = entries.last() {
         let ts = latest.file_name().into_string().unwrap();

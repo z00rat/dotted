@@ -46,6 +46,6 @@ pub fn run(runtime: &Runtime, artifact_name: &str) -> Result<()> {
     } else {
         format!("{repo}/{name}")
     };
-    println!("created {}", style(&display_id, "32;1", runtime));
+    println!("Created {}", style(&display_id, "32;1", runtime));
     Ok(())
 }

@@ -38,7 +38,7 @@ pub fn run(runtime: &Runtime, name: &str) -> Result<()> {
     dotted.repos.retain(|r| r.name != name);
 
     crate::types::write_toml(&runtime.dotted_path(), &dotted)?;
-    println!("Removed repository configuration for '{name}'.");
+    println!("Removed repo {}", crate::utils::style(name, "33", runtime));
 
     // Disable all artifacts under this repository
     let path = settings_path(runtime);
@@ -65,7 +65,10 @@ pub fn run(runtime: &Runtime, name: &str) -> Result<()> {
             file.artifacts.enable = enable.into_iter().collect();
             file.artifacts.disable = disable.into_iter().collect();
             crate::types::write_toml(&path, &file)?;
-            println!("Disabled all artifacts belonging to repository '{name}'.");
+            println!(
+                "Disabled artifacts for repo {}",
+                crate::utils::style(name, "33", runtime)
+            );
         }
     }
 

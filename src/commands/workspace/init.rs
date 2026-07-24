@@ -69,7 +69,14 @@ pub fn run(runtime: &Runtime, git_url: Option<String>) -> Result<()> {
     write_config_files(runtime)?;
     println!(
         "initialized {}",
-        runtime.display_path(&runtime.dotted_dir).display()
+        crate::utils::style(
+            &runtime
+                .display_path(&runtime.dotted_dir)
+                .display()
+                .to_string(),
+            "32",
+            runtime
+        )
     );
     Ok(())
 }
