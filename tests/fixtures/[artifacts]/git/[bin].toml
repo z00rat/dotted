@@ -1,0 +1,8 @@
+[distro.archlinux]
+packages = ["git", "git-delta"]
+
+[flatpak]
+packages = ["org.videolan.VLC"]
+
+[env]
+"GIT_EDITOR" = "micro"

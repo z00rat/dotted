@@ -1,0 +1,5 @@
+[env]
+"MICRO_TRUECOLOR" = "1"
+
+[config]
+remove = ["~/.config/micro/backups"]

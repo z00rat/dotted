@@ -1,0 +1,16 @@
+[init]
+	defaultBranch = master
+[color]
+	ui = true
+[core]
+	editor = micro
+[safe]
+	directory = *
+[http]
+	version = HTTP/2
+[push]
+	autoSetupRemote = true
+[pull]
+	rebase = true
+[commit]
+	gpgsign = true

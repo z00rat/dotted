@@ -1,0 +1,9 @@
+# Specific settings for device=sandbox and user=user1
+[artifacts]
+enable = ["/git"]
+
+[env]
+"SANDBOX_DOTTED" = "1"
+
+[replace]
+"yourgitemail@yourgitdomain.tld" = "user1@example.test"

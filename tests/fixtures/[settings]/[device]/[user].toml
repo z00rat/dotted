@@ -1,0 +1,9 @@
+[artifacts]
+enable = ["/git", "repo2/neovim", "repo2/sysconfig"]
+
+[ignore]
+folder = ["~/Downloads", "~/.cache"]
+file = ["~/.bash_history"]
+
+[replace]
+"yourgitemail@yourgitdomain.tld" = "user1@example.com"

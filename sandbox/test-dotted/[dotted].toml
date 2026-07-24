@@ -1,0 +1,20 @@
+[config]
+v = "0.1.0"
+env_path = ["~/.config/dotted/env.sh"]
+
+archlinux = "sudo pacman -S --needed --noconfirm"
+fedora = "sudo dnf install -y"
+ubuntu = "sudo apt-get install -y"
+
+[[repo]]
+name = "repo2"
+url = "https://example.invalid/repo2.git"
+
+[color]
+success = "green"
+warning = "yellow"
+error = "red"
+info = "cyan"
+muted = "bright-black"
+installed = "blue"
+diff = "yellow"

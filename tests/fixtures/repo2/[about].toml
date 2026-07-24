@@ -1,0 +1,7 @@
+[about.neovim]
+r = 1
+description = "Neovim config"
+
+[about.sysconfig]
+r = 1
+description = "System configurations under /env"

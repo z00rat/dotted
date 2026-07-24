@@ -1,0 +1,8 @@
+[distro.archlinux]
+packages = ["neovim"]
+
+[env]
+"EDITOR" = "nvim"
+
+[config]
+remove = ["~/.config/nvim-cache", "~/.local/share/nvim-plugins"]

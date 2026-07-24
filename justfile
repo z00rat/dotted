@@ -26,6 +26,9 @@ check:
 fmt:
     cargo fmt
 
+update:
+    cargo update
+
 # ------------------------------------------------------------------------------
 # Testing
 # ------------------------------------------------------------------------------
@@ -33,6 +36,21 @@ fmt:
 # Run tests using nextest (parallel, isolated test execution)
 test *args:
     cargo nextest run {{ args }}
+
+# Build the Arch Linux container sandbox image
+sandbox-build: build
+    cp target/debug/dotted sandbox/dotted
+    docker tag dotted-sandbox dotted-sandbox:old || true
+    docker build -t dotted-sandbox sandbox
+    rm -f sandbox/dotted
+
+# Open an interactive shell inside an Arch Linux container sandbox
+sandbox-shell: sandbox-build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker run -it --rm \
+      dotted-sandbox \
+      fish -c 'echo "Arch Linux sandbox shell. Try running: dotted status"; exec fish'
 
 # Run doc tests (nextest doesn't run doc tests, so standard cargo is used here)
 test-docs:
