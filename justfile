@@ -85,7 +85,8 @@ publish-dist TAG:
     echo "Building release binary..."
     cargo build --release
 
-    echo "Packaging generic Linux release archive (.tar.gz)..."
+    echo "Cleaning packaging output directories..."
+    rm -rf target/distrib target/debian target/generate-rpm
     mkdir -p target/distrib
     tar -czf "target/distrib/dotted-{{ TAG }}-x86_64-linux.tar.gz" -C target/release dotted
 
