@@ -86,9 +86,15 @@ publish-dist TAG:
     cargo build --release
 
     echo "Cleaning packaging output directories..."
-    rm -rf target/distrib target/debian target/generate-rpm
-    mkdir -p target/distrib
-    tar -czf "target/distrib/dotted-{{ TAG }}-x86_64-linux.tar.gz" -C target/release dotted
+    rm -rf target/distrib target/debian target/generate-rpm target/completions
+    mkdir -p target/distrib target/completions
+
+    echo "Generating shell completion scripts..."
+    target/release/dotted shell completions bash > target/completions/dotted.bash
+    target/release/dotted shell completions zsh > target/completions/_dotted
+    target/release/dotted shell completions fish > target/completions/dotted.fish
+
+    tar -czf "target/distrib/dotted-{{ TAG }}-x86_64-linux.tar.gz" -C target/release dotted -C ../completions dotted.bash _dotted dotted.fish
 
     echo "Building Debian (.deb) & Fedora (.rpm) packages if generators installed..."
     command -v cargo-deb >/dev/null 2>&1 && cargo deb || echo "cargo-deb not installed, skipping .deb"

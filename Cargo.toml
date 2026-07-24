@@ -79,6 +79,21 @@ assets = [
         "usr/share/doc/dotted/LICENSE",
         "644",
     ],
+    [
+        "target/completions/dotted.bash",
+        "usr/share/bash-completion/completions/dotted",
+        "644",
+    ],
+    [
+        "target/completions/_dotted",
+        "usr/share/zsh/site-functions/_dotted",
+        "644",
+    ],
+    [
+        "target/completions/dotted.fish",
+        "usr/share/fish/vendor_completions.d/dotted.fish",
+        "644",
+    ],
 ]
 
 # Metadata for Fedora/RHEL (.rpm) package generation
@@ -86,4 +101,7 @@ assets = [
 assets = [
     { source = "target/release/dotted", dest = "/usr/bin/dotted", mode = "755" },
     { source = "LICENSE", dest = "/usr/share/doc/dotted/LICENSE", mode = "644" },
+    { source = "target/completions/dotted.bash", dest = "/usr/share/bash-completion/completions/dotted", mode = "644" },
+    { source = "target/completions/_dotted", dest = "/usr/share/zsh/site-functions/_dotted", mode = "644" },
+    { source = "target/completions/dotted.fish", dest = "/usr/share/fish/vendor-completions.d/dotted.fish", mode = "644" },
 ]

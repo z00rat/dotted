@@ -18,4 +18,7 @@ package() {
   install -Dm755 "$srcdir/target/release/$pkgname" "$pkgdir/usr/bin/$pkgname" 2>/dev/null || \
   install -Dm755 "$startdir/target/release/$pkgname" "$pkgdir/usr/bin/$pkgname"
   install -Dm644 "$startdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 "$startdir/target/completions/dotted.bash" "$pkgdir/usr/share/bash-completion/completions/dotted"
+  install -Dm644 "$startdir/target/completions/_dotted" "$pkgdir/usr/share/zsh/site-functions/_dotted"
+  install -Dm644 "$startdir/target/completions/dotted.fish" "$pkgdir/usr/share/fish/vendor_completions.d/dotted.fish"
 }
