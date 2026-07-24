@@ -32,11 +32,11 @@ pub(crate) const DEFAULT_ENV_SH: &str = "~/.config/dotted/env.sh";
 pub(crate) const DEFAULT_GITIGNORE: &str = r"# Ignore everything
 *
 # Track only dotted control files
-![dotted].toml
-![settings]/
-![settings]/**
-![artifacts]/
-![artifacts]/**
+!\[dotted\].toml
+!\[settings\]/
+!\[settings\]/**
+!\[artifacts\]/
+!\[artifacts\]/**
 !.gitignore
 ";
 

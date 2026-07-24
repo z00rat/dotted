@@ -1,9 +1,9 @@
 # Ignore everything
 *
 # Track only dotted control files
-![dotted].toml
-![settings]/
-![settings]/**
-![artifacts]/
-![artifacts]/**
+!\[dotted\].toml
+!\[settings\]/
+!\[settings\]/**
+!\[artifacts\]/
+!\[artifacts\]/**
 !.gitignore
