@@ -70,3 +70,47 @@ clean:
 
 # Run full local validation before committing
 validate: fmt check test test-docs
+
+# Build release packages for Arch Linux (.pkg.tar.zst), Debian/Ubuntu (.deb), Fedora/RHEL (.rpm), and shell script installer
+publish-dist TAG:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    export PATH="$HOME/.local/share/cargo/bin:$HOME/.cargo/bin:$PATH"
+
+    VERSION=$(cargo metadata --no-deps --format-version 1 | grep -oP '"name":"dotted".*?"version":"\K[^"]+' | head -n 1)
+    echo "Syncing PKGBUILD pkgver=$VERSION from Cargo.toml..."
+    sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
+
+    echo "Building release binary..."
+    cargo build --release
+
+    echo "Packaging generic Linux release archive (.tar.gz)..."
+    mkdir -p target/distrib
+    tar -czf "target/distrib/dotted-{{ TAG }}-x86_64-linux.tar.gz" -C target/release dotted
+
+    echo "Building Debian (.deb) & Fedora (.rpm) packages if generators installed..."
+    command -v cargo-deb >/dev/null 2>&1 && cargo deb || echo "cargo-deb not installed, skipping .deb"
+    command -v cargo-generate-rpm >/dev/null 2>&1 && cargo generate-rpm || echo "cargo-generate-rpm not installed, skipping .rpm"
+
+    # Build Arch Linux package if makepkg is installed
+    if command -v makepkg >/dev/null 2>&1; then
+        echo "Building native Arch Linux package (.pkg.tar.zst)..."
+        PKGDEST="$PWD/target/distrib" makepkg -f --nodeps
+        # Ensure package is zstd compressed to .pkg.tar.zst regardless of host makepkg.conf
+        for f in target/distrib/*.pkg.tar; do
+            if [ -f "$f" ]; then
+                echo "Compressing $f with zstd..."
+                zstd -z -f --rm "$f" -o "$f.zst"
+            fi
+        done
+    fi
+
+    # Collect deb, rpm, and arch packages into distrib directory
+    mkdir -p target/distrib
+    cp -f target/debian/*.deb target/distrib/ 2>/dev/null || true
+    cp -f target/generate-rpm/*.rpm target/distrib/ 2>/dev/null || true
+
+    echo "Uploading dist artifacts to GitHub Release {{ TAG }}..."
+    git push origin "{{ TAG }}" 2>/dev/null || true
+    gh release create "{{ TAG }}" target/distrib/* --generate-notes --title "Release {{ TAG }}" 2>/dev/null || gh release upload "{{ TAG }}" target/distrib/* --clobber

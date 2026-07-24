@@ -2,6 +2,8 @@
 name = "dotted"
 version = "1.0.0"
 edition = "2024"
+license = "AGPL-3.0-only"
+description = "A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages."
 
 [dependencies]
 color-eyre = "0.6"
@@ -39,5 +41,49 @@ missing_errors_doc = "allow"
 unwrap_used = "deny"
 expect_used = "warn"
 panic_in_result_fn = "deny"
+
 await_holding_lock = "deny"
 undocumented_unsafe_blocks = "deny"
+
+[package.metadata.release]
+tag-message = "v{{version}}"
+tag-name = "v{{version}}"
+push = true
+publish = false
+pre-release-commit-message = "chore(release): v{{version}}"
+post-release-commit-message = "chore: post-release v{{next_version}}"
+
+# Build dist artifacts locally and upload directly to GitHub Releases via gh CLI
+post-release-commit-hook = ["just", "publish-dist", "v{{version}}"]
+
+# Config for cargo-dist
+[package.metadata.dist]
+installers = ["shell"]
+targets = ["x86_64-unknown-linux-gnu"]
+dist-dir = "target/distrib"
+dist-contents = ["LICENSE"]
+
+# Metadata for Debian (.deb) package generation
+[package.metadata.deb]
+maintainer = "hello@zurat.dev"
+copyright = "2026, dotted developers"
+extended-description = "A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages."
+assets = [
+    [
+        "target/release/dotted",
+        "usr/bin/dotted",
+        "755",
+    ],
+    [
+        "LICENSE",
+        "usr/share/doc/dotted/LICENSE",
+        "644",
+    ],
+]
+
+# Metadata for Fedora/RHEL (.rpm) package generation
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/dotted", dest = "/usr/bin/dotted", mode = "755" },
+    { source = "LICENSE", dest = "/usr/share/doc/dotted/LICENSE", mode = "644" },
+]
