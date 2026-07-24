@@ -197,7 +197,7 @@ fn resolve_conflict(runtime: &Runtime, file: &PlannedFile) -> Result<&'static st
     if runtime.no_color {
         loop {
             print!(
-                "Conflict in {}! [r]ight (deploy new), [l]eft (keep current), [a]bort? ",
+                "Conflict in {}! [r]ight (deploy new), [l]eft (keep current), [u]pdate repo, [a]bort? ",
                 file.display_target.display()
             );
             std::io::Write::flush(&mut std::io::stdout())?;
@@ -207,9 +207,10 @@ fn resolve_conflict(runtime: &Runtime, file: &PlannedFile) -> Result<&'static st
             match choice.as_str() {
                 "r" | "right" => return Ok("right"),
                 "l" | "left" => return Ok("left"),
+                "u" | "update" | "repo" => return Ok("update_repo"),
                 "a" | "abort" => return Ok("abort"),
                 _ => {
-                    println!("invalid choice. Please enter 'r', 'l', or 'a'.");
+                    println!("invalid choice. Please enter 'r', 'l', 'u', or 'a'.");
                 }
             }
         }
@@ -218,8 +219,13 @@ fn resolve_conflict(runtime: &Runtime, file: &PlannedFile) -> Result<&'static st
             "Conflict in file write for {}",
             file.display_target.display()
         ))
-        .item("right", "Right (deploy new / overwrite)", "")
-        .item("left", "Left (keep current / skip)", "")
+        .item("right", "Right (deploy new / overwrite target)", "")
+        .item("left", "Left (keep current target / skip)", "")
+        .item(
+            "update_repo",
+            "Update repo (overwrite repo file with target)",
+            "",
+        )
         .item("abort", "Abort deployment", "")
         .interact()
         .map_err(|e| color_eyre::eyre::Report::msg(e.to_string()))
@@ -256,6 +262,15 @@ pub(crate) fn apply_file(runtime: &Runtime, file: &PlannedFile, yes: bool) -> Re
                         "{} {}",
                         style("skip", "33", runtime),
                         file.display_target.display()
+                    );
+                    return Ok(());
+                }
+                "update_repo" => {
+                    fs::write(&file.source, &current)?;
+                    println!(
+                        "{} {}",
+                        style("updated repo", "32", runtime),
+                        runtime.display_path(&file.source).display()
                     );
                     return Ok(());
                 }
