@@ -21,6 +21,8 @@ pub(crate) struct Runtime {
     pub(crate) no_color: bool,
 }
 
+const DEFAULT_DEVICE: &str = "default_device";
+
 impl Runtime {
     pub(crate) fn from_cli(cli: &crate::cli::Cli) -> Result<Self> {
         let user = cli
@@ -51,7 +53,13 @@ impl Runtime {
                     .and_then(|local| local.device)
             })
             .or_else(|| std::env::var("HOSTNAME").ok())
-            .unwrap_or_else(|| "device".to_string());
+            .or_else(|| {
+                fs::read_to_string(root_dir.join("etc/hostname"))
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+            })
+            .unwrap_or_else(|| DEFAULT_DEVICE.to_string());
         let distro = cli
             .distro
             .clone()
