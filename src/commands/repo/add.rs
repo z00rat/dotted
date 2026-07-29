@@ -22,7 +22,7 @@ pub fn run(runtime: &Runtime, name: &str, git_url: &str) -> Result<()> {
         .iter()
         .any(|repo| repo.name == name)
     {
-        bail!("repo already exists: {name}");
+        bail!("Repository already exists: {name}");
     }
     dotted.repos.push(RepoConfig {
         name: name.to_string(),
@@ -41,6 +41,9 @@ pub fn run(runtime: &Runtime, name: &str, git_url: &str) -> Result<()> {
     } else {
         crate::utils::run_git(&runtime.dotted_dir, ["clone", git_url, name])?;
     }
-    println!("Added repo {}", crate::utils::style(name, "32", runtime));
+    println!(
+        "Added repository {}",
+        crate::utils::style(name, "32", runtime)
+    );
     Ok(())
 }

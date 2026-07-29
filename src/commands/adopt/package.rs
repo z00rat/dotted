@@ -19,7 +19,7 @@ fn prompt_package_name(runtime: &Runtime, package: Option<String>) -> Result<Str
             .map(|s| s.trim().to_string())
             .map_err(|e| color_eyre::eyre::Report::msg(e.to_string()))
     } else {
-        bail!("adopt package requires a package name when running non-interactively");
+        bail!("The adopt package command requires a package name when running non-interactively.");
     }
 }
 
@@ -83,7 +83,7 @@ pub fn run(
     ensure_about_entry(runtime, repo, artifact)?;
     if package_type == "flatpak" {
         println!(
-            "Added flatpak package {} to {} [bin].toml",
+            "Added Flatpak package {} to {} [bin].toml",
             style(&package_name, "32", runtime),
             style(artifact_id, "36;1", runtime)
         );

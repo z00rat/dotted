@@ -1,13 +1,13 @@
 /// CLI Command: `repo list`
 ///
 /// What it does:
-/// Lists all repositories configured in `dotted.toml` alongside their source location and the number of artifacts they contain.
+/// Lists all repositories configured in `[dotted].toml` alongside their source location and the number of artifacts they contain.
 ///
 /// Variations:
 /// Lists all configured repositories.
 ///
 /// Decisions & Logic Branches:
-/// - Loads the `dotted.toml` and discovers all available artifacts to count how many belong to each repository.
+/// - Loads `[dotted].toml` and discovers all available artifacts to count how many belong to each repository.
 /// - Reports each repository's configured Git URL and discovered artifact count.
 /// - Formats results inside a dynamic table.
 use color_eyre::eyre::Result;

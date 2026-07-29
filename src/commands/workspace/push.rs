@@ -1,6 +1,6 @@
 /// CLI Command: `workspace push`
 ///
-/// Stages, commits, and pushes only the dotted repository using a timestamped
+/// Stages, commits, and pushes only the Dotted repository using a timestamped
 /// `dotted: update ...` message; clean workspaces are left unchanged.
 use chrono::Local;
 use color_eyre::eyre::Result;

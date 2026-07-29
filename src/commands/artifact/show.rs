@@ -15,9 +15,9 @@
 ///   - `[missing]`: Target file does not exist on the filesystem.
 /// - Shows inline git-like diffs for any `[changed]` files.
 use color_eyre::eyre::{Result, bail};
-use std::fs;
 use walkdir::WalkDir;
 
+use crate::commands::deploy::files::{self, FileChange};
 use crate::commands::lib::print_plan_extras;
 use crate::plan::{build_plan, discover_artifacts};
 use crate::types::Runtime;
@@ -88,34 +88,36 @@ fn print_artifact_files(_runtime: &Runtime, artifact: &crate::types::Artifact) -
     Ok(())
 }
 
-fn print_deployment_status(runtime: &Runtime, plan: &crate::types::Plan) {
+fn print_deployment_status(runtime: &Runtime, plan: &crate::types::Plan) -> Result<()> {
     println!("Deployment status:");
     for file in &plan.files {
-        if file.target.exists() {
-            let current = fs::read(&file.target).unwrap_or_default();
-            if current == file.bytes {
+        match files::classify(file)? {
+            None => {
                 println!(
                     "  {} {}",
                     style("[ok]", "32", runtime),
                     runtime.display_path(&file.display_target).display()
                 );
-            } else {
+            }
+            Some(FileChange::Changed) => {
                 println!(
                     "  {} {}",
                     style("[changed]", "33", runtime),
                     runtime.display_path(&file.display_target).display()
                 );
             }
-        } else {
-            println!(
-                "  {} {}",
-                style("[missing]", "31", runtime),
-                runtime.display_path(&file.display_target).display()
-            );
+            Some(FileChange::New) => {
+                println!(
+                    "  {} {}",
+                    style("[missing]", "31", runtime),
+                    runtime.display_path(&file.display_target).display()
+                );
+            }
         }
     }
     print_plan_extras(runtime, plan, None);
     println!();
+    Ok(())
 }
 
 pub fn run(runtime: &Runtime, artifact_id: &str) -> Result<()> {
@@ -130,29 +132,28 @@ pub fn run(runtime: &Runtime, artifact_id: &str) -> Result<()> {
 
     // Deployment status
     let plan = build_plan(runtime, Some(artifact_id))?;
-    print_deployment_status(runtime, &plan);
+    print_deployment_status(runtime, &plan)?;
 
     // Diffs
     println!("{}", style("DEPLOYMENT DIFFS:", "36;1", runtime));
     let mut diff_shown = false;
     for file in &plan.files {
-        if file.target.exists() {
-            let current = fs::read(&file.target)?;
-            if current != file.bytes {
-                let border = "━".repeat(80);
-                println!("{}", style(&border, "33", runtime));
-                println!(
-                    "{}  {} ({})",
-                    style("[diff]", "33;1", runtime),
-                    style(&file.display_target.to_string_lossy(), "1", runtime),
-                    file.artifact_id
-                );
-                println!("{}", style(&border, "33", runtime));
-                show_file_diff(file, &current, runtime);
-                println!("{}", style(&border, "33", runtime));
-                println!();
-                diff_shown = true;
-            }
+        if let Some(current) = files::read_current(file)?
+            && current != file.bytes
+        {
+            let border = "━".repeat(80);
+            println!("{}", style(&border, "33", runtime));
+            println!(
+                "{}  {} ({})",
+                style("[diff]", "33;1", runtime),
+                style(&file.display_target.to_string_lossy(), "1", runtime),
+                file.artifact_id
+            );
+            println!("{}", style(&border, "33", runtime));
+            show_file_diff(file, &current, runtime);
+            println!("{}", style(&border, "33", runtime));
+            println!();
+            diff_shown = true;
         }
     }
     if !diff_shown {

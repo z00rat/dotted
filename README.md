@@ -6,24 +6,24 @@ A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is 
 
 ## Key Features
 
-- **Decoupled Modular Artifacts**: Share modular dotfile components via independent repositories and artifacts (`[artifacts]/` or `repo/artifact`) rather than forcing a monolithic dotfiles repository.
+- **Decoupled Modular Artifacts**: Share modular dotfile components via independent repositories and artifacts (`[artifacts]/` or `repository/artifact`) rather than forcing a monolithic dotfiles repository.
 - **Hierarchical Overrides**: Merges multi-device and multi-user configurations hierarchically (`[device]/[user].toml` -> `laptop/user.toml`) with zero templating logic needed.
 - **Template-Free Variable Replacement**: Perform targeted string replacements (`[replace]` key-value mappings) directly on text dotfiles without complex template syntax.
-- **System Package & Download Tracking**: Track, manifest, and declare dependencies across Arch Linux (`pacman`), Fedora (`dnf`), Ubuntu (`apt-get`), Flatpak, and web binary downloads (`curl`/`unzip`).
+- **System Package and Download Tracking**: Track and declare dependencies across Arch Linux (`pacman`), Fedora (`dnf`), Ubuntu (`apt-get`), Flatpak, and web binary downloads (`curl`/`unzip`).
 - **Orphan & Unclaimed Resource Audits**: Inspect system drift and discover untracked installed packages or binaries via `dotted deploy orphans`.
 - **Safety First & Automatic Backups**: Existing target files modified during deployment are automatically backed up with Unix timestamps (`~/.cache/dotted/backups`). `dotted` never deletes files or runs unrequested uninstalls.
 - **Deny-by-Default Git Security**: The workspace enforces a strict `.gitignore` layout to prevent accidental commits of local settings, tokens, or machine-specific secrets.
-- **Rich Interactive CLI & Shell Completion**: Features dynamic terminal completion generation for Bash, Zsh, and Fish, plus interactive TUI prompts for conflict resolution and file adoption.
+- **Rich Interactive CLI and Shell Completion**: Provides dynamic terminal completion generation for Bash, Zsh, and Fish, plus interactive TUI prompts for conflict resolution and file adoption.
 
 ---
 
 ## Directory Structure
 
 All configurations and cloned artifact repositories are stored under:
-`~/.local/share/dotted/` (known as the **dotted repo**).
+`~/.local/share/dotted/` (known as the **Dotted repository**).
 
 ```text
-~/.local/share/dotted/            ← Dotted Repo (private git remote recommended)
+~/.local/share/dotted/            ← Dotted repository (a private Git remote is recommended)
 ├── .gitignore
 ├── [dotted].toml                 ← Configures repositories & global shell env path
 ├── [artifacts]/                  ← Locally writable artifacts
@@ -131,6 +131,9 @@ This project requires Rust and Cargo. It uses `just` as a command runner.
 3. **Development Tasks (using `just`)**:
    - List available commands: `just`
    - Run tests & linters: `just validate`
+   - Run focused quality checks: `just quality`
+   - Run unit tests only: `just test-unit`
+   - Run CLI integration tests only: `just test-integration`
 
 ---
 
@@ -138,7 +141,7 @@ This project requires Rust and Cargo. It uses `just` as a command runner.
 
 ### 1. Workspace Commands
 
-Manage the dotted repo environment and pull/push changes across machines.
+Manage the Dotted repository and pull/push changes across machines.
 
 - **Initialize a workspace**:
   ```bash
@@ -320,8 +323,8 @@ Adopt your current shell configurations into a new artifact named `shell`:
 
 ```bash
 dotted artifact create shell
-dotted adopt file personal-dots/shell ~/.bashrc
-dotted adopt file personal-dots/shell ~/.config/starship.toml
+dotted adopt file /shell ~/.bashrc
+dotted adopt file /shell ~/.config/starship.toml
 ```
 
 ### Step 3: Register Package Dependencies
@@ -329,7 +332,7 @@ dotted adopt file personal-dots/shell ~/.config/starship.toml
 Ensure your favorite terminal prompt is registered to install:
 
 ```bash
-dotted adopt package personal-dots/shell starship native archlinux
+dotted adopt package /shell starship --type archlinux
 ```
 
 ### Step 4: Review and Deploy
@@ -342,4 +345,4 @@ dotted deploy diff
 dotted deploy apply
 ```
 
-This will copy files to their proper places, download/install any missing packages, and prepare your system environments!
+This copies files to their proper locations, downloads and installs missing packages, and prepares your system environment.

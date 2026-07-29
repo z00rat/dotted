@@ -18,53 +18,37 @@
 /// - Prints shell-ready commands for missing packages, Flatpaks, and downloads.
 /// - Writes generated environment variables to the configured environment path.
 use color_eyre::eyre::Result;
-use std::fs;
 
-use crate::commands::lib::{
-    apply_file, apply_packages_and_downloads, print_plan_extras, write_env_file,
-};
+use crate::commands::deploy::files::{self, FileChange};
+use crate::commands::deployment::{apply_file, apply_packages_and_downloads, write_env_file};
+use crate::commands::lib::print_plan_extras;
 use crate::plan::build_plan;
 use crate::types::{DownloadInstall, Runtime};
 use crate::utils::{confirm, style};
-
-fn check_artifact_has_changes(art: &crate::types::Artifact, plan: &crate::types::Plan) -> bool {
-    for file in plan.files.iter().filter(|f| f.artifact_id == art.id) {
-        if file.target.exists() {
-            let current = fs::read(&file.target).unwrap_or_default();
-            if current != file.bytes {
-                return true;
-            }
-        } else {
-            return true;
-        }
-    }
-    false
-}
 
 fn print_artifact_changes(
     runtime: &Runtime,
     art: &crate::types::Artifact,
     plan: &crate::types::Plan,
-) {
+) -> Result<()> {
     println!("Changes for {}:", art.id);
     for file in plan.files.iter().filter(|file| file.artifact_id == art.id) {
-        if file.target.exists() {
-            let current = fs::read(&file.target).unwrap_or_default();
-            if current != file.bytes {
+        match files::classify(file)? {
+            Some(FileChange::Changed) => println!(
+                "  {} {} -> {}",
+                style("[change]", "33", runtime),
+                runtime.display_path(&file.source).display(),
+                runtime.display_path(&file.display_target).display()
+            ),
+            Some(FileChange::New) => {
                 println!(
                     "  {} {} -> {}",
-                    style("[change]", "33", runtime),
+                    style("[new]", "32", runtime),
                     runtime.display_path(&file.source).display(),
                     runtime.display_path(&file.display_target).display()
                 );
             }
-        } else {
-            println!(
-                "  {} {} -> {}",
-                style("[new]", "32", runtime),
-                runtime.display_path(&file.source).display(),
-                runtime.display_path(&file.display_target).display()
-            );
+            None => {}
         }
     }
 
@@ -100,6 +84,7 @@ fn print_artifact_changes(
             println!("    - {pkg}");
         }
     }
+    Ok(())
 }
 
 pub fn run(runtime: &Runtime, args: &crate::cli::ApplyArgs) -> Result<()> {
@@ -108,7 +93,7 @@ pub fn run(runtime: &Runtime, args: &crate::cli::ApplyArgs) -> Result<()> {
 
     let mut artifacts_to_apply = Vec::new();
     for art in &plan.artifacts {
-        if check_artifact_has_changes(art, &plan) {
+        if files::has_changes(&plan, &art.id)? {
             artifacts_to_apply.push(art.clone());
         }
     }
@@ -123,7 +108,7 @@ pub fn run(runtime: &Runtime, args: &crate::cli::ApplyArgs) -> Result<()> {
 
     for art in artifacts_to_apply {
         if !args.yes {
-            print_artifact_changes(runtime, &art, &plan);
+            print_artifact_changes(runtime, &art, &plan)?;
         }
 
         if !args.yes && !confirm(&format!("apply {}?", art.id), runtime.no_color)? {

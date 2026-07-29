@@ -1,15 +1,15 @@
 /// CLI Command: `repo remove <name>`
 ///
 /// What it does:
-/// Removes a repository's configuration from `dotted.toml`, disables all of its artifacts in settings, and warns the user about the disk directory.
+/// Removes a repository's configuration from `[dotted].toml`, disables all of its artifacts in settings, and warns the user about the disk directory.
 ///
 /// Variations:
 /// None (requires repository name).
 ///
 /// Decisions & Logic Branches:
-/// - Fails if the repository is not found in the `[[repo]]` entries of `dotted.toml`.
+/// - Fails if the repository is not found in the `[[repo]]` entries of `[dotted].toml`.
 /// - Asks for confirmation before removing.
-/// - Saves changes to `dotted.toml`.
+/// - Saves changes to `[dotted].toml`.
 /// - Disables all enabled artifacts in settings that belong to the removed repository (matching artifact IDs prefixed with `name/`).
 /// - Prints a warning that the actual repository directory remains on disk (does not delete files automatically).
 use color_eyre::eyre::{Result, bail};
@@ -38,7 +38,10 @@ pub fn run(runtime: &Runtime, name: &str) -> Result<()> {
     dotted.repos.retain(|r| r.name != name);
 
     crate::types::write_toml(&runtime.dotted_path(), &dotted)?;
-    println!("Removed repo {}", crate::utils::style(name, "33", runtime));
+    println!(
+        "Removed repository {}",
+        crate::utils::style(name, "33", runtime)
+    );
 
     // Disable all artifacts under this repository
     let path = settings_path(runtime);
@@ -66,7 +69,7 @@ pub fn run(runtime: &Runtime, name: &str) -> Result<()> {
             file.artifacts.disable = disable.into_iter().collect();
             crate::types::write_toml(&path, &file)?;
             println!(
-                "Disabled artifacts for repo {}",
+                "Disabled artifacts for repository {}",
                 crate::utils::style(name, "33", runtime)
             );
         }

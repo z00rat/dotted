@@ -9,7 +9,7 @@
 ///
 /// Decisions & Logic Branches:
 /// - Finds and parses all workspace configuration TOML files, validating syntax.
-/// - Checks the reachability of git remotes for the dotted repository and all configured package repositories.
+/// - Checks the reachability of Git remotes for the Dotted repository and all configured package repositories.
 /// - Checks if the directory exists for all configured package repositories.
 /// - Checks if any artifact directories lack an `about.toml` file.
 /// - Checks if all artifacts marked as enabled in settings are actually present in the workspace.
@@ -145,7 +145,7 @@ pub fn run(runtime: &Runtime, filter: Option<&str>) -> Result<()> {
         check_remote_reachability(
             runtime,
             &runtime.dotted_dir,
-            "dotted repo",
+            "Dotted repository",
             &mut problems,
             None,
         );

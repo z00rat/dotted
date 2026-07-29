@@ -32,7 +32,11 @@ pub fn run(runtime: &Runtime, args: &crate::cli::LsArgs) -> Result<()> {
         .iter()
         .map(|file| file.display_target.clone())
         .collect();
-    let show = |status: &str| args.filter.as_deref().is_none_or(|filter| filter == status);
+    let show = |status: &str| {
+        args.filter
+            .as_ref()
+            .is_none_or(|filter| filter.as_str() == status)
+    };
     let has_tracked_files_under = |dir: &Path| tracked.iter().any(|file| file.starts_with(dir));
 
     let mut it = WalkDir::new(&root)

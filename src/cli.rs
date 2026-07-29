@@ -1,4 +1,4 @@
-use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
 use std::io;
 use std::path::PathBuf;
@@ -21,12 +21,95 @@ pub struct Cli {
     #[arg(long, global = true, help = "Override resolved user")]
     pub(crate) user: Option<String>,
     #[arg(long, global = true, value_parser = ["archlinux", "fedora", "ubuntu"], help = "Override detected Linux distribution")]
-    pub(crate) distro: Option<String>,
+    pub(crate) distro: Option<Distro>,
     #[arg(long, global = true, help = "Disable colored output")]
     pub(crate) no_color: bool,
     #[command(subcommand)]
     pub(crate) command: Commands,
 }
+
+#[derive(Clone, Debug, ValueEnum)]
+pub(crate) enum Distro {
+    Archlinux,
+    Fedora,
+    Ubuntu,
+}
+
+impl Distro {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::Archlinux => "archlinux",
+            Self::Fedora => "fedora",
+            Self::Ubuntu => "ubuntu",
+        }
+    }
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+pub(crate) enum DoctorCategory {
+    Config,
+    Repo,
+    Artifact,
+    Tool,
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+pub(crate) enum ArtifactState {
+    Enabled,
+    Disabled,
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+pub(crate) enum StatusFilter {
+    Artifacts,
+    Files,
+    Env,
+    Packages,
+    Downloads,
+    Services,
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+pub(crate) enum OrphanFilter {
+    Native,
+    Flatpak,
+    Downloads,
+    Services,
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+pub(crate) enum FileFilter {
+    Tracked,
+    Untracked,
+    Ignored,
+    Partial,
+    Masked,
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+pub(crate) enum PackageType {
+    Archlinux,
+    Fedora,
+    Ubuntu,
+    Flatpak,
+}
+
+macro_rules! as_str {
+    ($type:ty, {$($variant:ident => $value:literal),+ $(,)?}) => {
+        impl $type {
+            pub(crate) fn as_str(&self) -> &'static str {
+                match self { $(Self::$variant => $value,)+ }
+            }
+        }
+    };
+}
+
+as_str!(DoctorCategory, { Config => "config", Repo => "repo", Artifact => "artifact", Tool => "tool" });
+as_str!(ArtifactState, { Enabled => "enabled", Disabled => "disabled" });
+as_str!(StatusFilter, { Artifacts => "artifacts", Files => "files", Env => "env", Packages => "packages", Downloads => "downloads", Services => "services" });
+as_str!(OrphanFilter, { Native => "native", Flatpak => "flatpak", Downloads => "downloads", Services => "services" });
+as_str!(FileFilter, { Tracked => "tracked", Untracked => "untracked", Ignored => "ignored", Partial => "partial", Masked => "masked" });
+as_str!(PackageType, { Archlinux => "archlinux", Fedora => "fedora", Ubuntu => "ubuntu", Flatpak => "flatpak" });
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
@@ -63,8 +146,8 @@ pub(crate) enum WorkspaceCommands {
     Cd,
     #[command(about = "Check workspace and system configuration health")]
     Doctor {
-        #[arg(value_parser = ["config", "repo", "artifact", "tool"], help = "Check category")]
-        category: Option<String>,
+        #[arg(help = "Check category")]
+        category: Option<DoctorCategory>,
     },
     #[command(about = "Format all dotted TOML configuration files in the workspace")]
     Format,
@@ -78,12 +161,12 @@ pub(crate) enum ArtifactCommands {
         filter: Option<String>,
         #[arg(long, hide = true)]
         raw: bool,
-        #[arg(long, hide = true, value_parser = ["enabled", "disabled"])]
-        state: Option<String>,
+        #[arg(long, hide = true)]
+        state: Option<ArtifactState>,
     },
     #[command(about = "Show details of a specific artifact")]
     Show {
-        #[arg(help = "Artifact ID (repo/artifact) to show details for")]
+        #[arg(help = "Artifact ID (repository/artifact) to show details for")]
         artifact: String,
     },
     #[command(about = "Create a new artifact scaffold")]
@@ -93,17 +176,17 @@ pub(crate) enum ArtifactCommands {
     },
     #[command(about = "Enable one or more artifacts")]
     Enable {
-        #[arg(help = "Artifact ID(s) (repo/artifact) to enable", num_args = 1..)]
+        #[arg(help = "Artifact ID(s) (repository/artifact) to enable", num_args = 1..)]
         artifacts: Vec<String>,
     },
     #[command(about = "Disable one or more artifacts")]
     Disable {
-        #[arg(help = "Artifact ID(s) (repo/artifact) to disable", num_args = 1..)]
+        #[arg(help = "Artifact ID(s) (repository/artifact) to disable", num_args = 1..)]
         artifacts: Vec<String>,
     },
     #[command(about = "Uninstall and disable an artifact")]
     Uninstall {
-        #[arg(help = "Artifact ID (repo/artifact) to remove")]
+        #[arg(help = "Artifact ID (repository/artifact) to remove")]
         artifact: String,
         #[arg(short, long, help = "Skip confirmation prompts")]
         yes: bool,
@@ -114,23 +197,23 @@ pub(crate) enum ArtifactCommands {
 pub(crate) enum AdoptCommands {
     #[command(about = "Adopt system files or directories into your personal repository")]
     File {
-        #[arg(help = "Artifact ID (repo/artifact) to adopt into")]
+        #[arg(help = "Artifact ID (repository/artifact) to adopt into")]
         artifact: String,
         #[arg(help = "Path(s) to the system file/directory to adopt", num_args = 1..)]
         paths: Vec<PathBuf>,
     },
     #[command(about = "Adopt a package manager dependency")]
     Package {
-        #[arg(help = "Artifact ID (repo/artifact) to adopt package into")]
+        #[arg(help = "Artifact ID (repository/artifact) to adopt package into")]
         artifact: String,
         #[arg(help = "Name of the package to add")]
         package: Option<String>,
-        #[arg(long = "type", value_parser = ["archlinux", "fedora", "ubuntu", "flatpak"], help = "Package type")]
-        package_type: Option<String>,
+        #[arg(long = "type", help = "Package type")]
+        package_type: Option<PackageType>,
     },
     #[command(about = "Adopt a systemd service unit")]
     Service {
-        #[arg(help = "Artifact ID (repo/artifact) to adopt service into")]
+        #[arg(help = "Artifact ID (repository/artifact) to adopt service into")]
         artifact: String,
         #[arg(help = "Service scope ('user' or 'system') or service unit name")]
         scope_or_service: Option<String>,
@@ -145,8 +228,8 @@ pub(crate) enum DeployCommands {
     Status {
         #[arg(help = "Filter status to a specific artifact")]
         artifact: Option<String>,
-        #[arg(short, long, value_parser = ["artifacts", "files", "env", "packages", "downloads", "services"], help = "Status category")]
-        filter: Option<String>,
+        #[arg(short, long, help = "Status category")]
+        filter: Option<StatusFilter>,
     },
     #[command(about = "Show differences between rendered files and active system files")]
     Diff {
@@ -157,8 +240,8 @@ pub(crate) enum DeployCommands {
     Apply(ApplyArgs),
     #[command(about = "List packages, downloads, and services not declared by active artifacts")]
     Orphans {
-        #[arg(short, long, value_parser = ["native", "flatpak", "downloads", "services"], help = "Category")]
-        filter: Option<String>,
+        #[arg(short, long, help = "Category")]
+        filter: Option<OrphanFilter>,
     },
 }
 
@@ -216,8 +299,8 @@ pub(crate) enum IgnoreFileCommands {
     Scan {
         #[arg(long, help = "Explicit root directory to scan")]
         path: Option<PathBuf>,
-        #[arg(short, long, value_parser = ["tracked", "untracked", "ignored", "partial", "masked"], help = "File status category")]
-        filter: Option<String>,
+        #[arg(short, long, help = "File status category")]
+        filter: Option<FileFilter>,
     },
 }
 
@@ -298,7 +381,7 @@ pub(crate) struct LsArgs {
     #[arg(long, help = "Explicit root directory to scan")]
     pub(crate) path: Option<PathBuf>,
     #[arg(short, long, value_parser = ["tracked", "untracked", "ignored", "partial", "masked"], help = "File status category")]
-    pub(crate) filter: Option<String>,
+    pub(crate) filter: Option<FileFilter>,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -399,19 +482,19 @@ _dotted() {
         let mut output = String::from_utf8(buffer)?;
         let targets = &[
             (
-                "::artifact -- Artifact ID (repo/artifact) to enable:",
+                "::artifact -- Artifact ID (repository/artifact) to enable:",
                 "::artifact:__dotted_artifacts_disabled",
             ),
             (
-                "::artifact -- Artifact ID (repo/artifact) to disable:",
+                "::artifact -- Artifact ID (repository/artifact) to disable:",
                 "::artifact:__dotted_artifacts_enabled",
             ),
             (
-                "::artifact -- Artifact ID (repo/artifact) to remove:",
+                "::artifact -- Artifact ID (repository/artifact) to remove:",
                 "::artifact:__dotted_artifacts",
             ),
             (
-                "::artifact -- Artifact ID (repo/artifact) to show details for:",
+                "::artifact -- Artifact ID (repository/artifact) to show details for:",
                 "::artifact:__dotted_artifacts",
             ),
             (
@@ -427,15 +510,15 @@ _dotted() {
                 "::artifact:__dotted_artifacts",
             ),
             (
-                "::artifact -- Artifact ID (repo/artifact) to adopt into:",
+                "::artifact -- Artifact ID (repository/artifact) to adopt into:",
                 "::artifact:__dotted_artifacts",
             ),
             (
-                "::artifact -- Artifact ID (repo/artifact) to adopt package into:",
+                "::artifact -- Artifact ID (repository/artifact) to adopt package into:",
                 "::artifact:__dotted_artifacts",
             ),
             (
-                "::artifact -- Artifact ID (repo/artifact) to adopt service into:",
+                "::artifact -- Artifact ID (repository/artifact) to adopt service into:",
                 "::artifact:__dotted_artifacts",
             ),
         ];
@@ -445,34 +528,34 @@ _dotted() {
         output = output.replace("__dotted_artifacts_default", "__dotted_artifacts_dynamic");
         for (description, helper) in [
             (
-                ":artifact -- Artifact ID (repo/artifact) to show details for:_default",
-                ":artifact -- Artifact ID (repo/artifact) to show details for:__dotted_artifacts_dynamic",
+                ":artifact -- Artifact ID (repository/artifact) to show details for:_default",
+                ":artifact -- Artifact ID (repository/artifact) to show details for:__dotted_artifacts_dynamic",
             ),
             (
-                ":artifact -- Artifact ID (repo/artifact) to enable:_default",
-                ":artifact -- Artifact ID (repo/artifact) to enable:__dotted_artifacts_dynamic",
+                ":artifact -- Artifact ID (repository/artifact) to enable:_default",
+                ":artifact -- Artifact ID (repository/artifact) to enable:__dotted_artifacts_dynamic",
             ),
             (
-                ":artifact -- Artifact ID (repo/artifact) to disable:_default",
-                ":artifact -- Artifact ID (repo/artifact) to disable:__dotted_artifacts_dynamic",
+                ":artifact -- Artifact ID (repository/artifact) to disable:_default",
+                ":artifact -- Artifact ID (repository/artifact) to disable:__dotted_artifacts_dynamic",
             ),
             (
-                ":artifact -- Artifact ID (repo/artifact) to remove:_default",
-                ":artifact -- Artifact ID (repo/artifact) to remove:__dotted_artifacts_dynamic",
+                ":artifact -- Artifact ID (repository/artifact) to remove:_default",
+                ":artifact -- Artifact ID (repository/artifact) to remove:__dotted_artifacts_dynamic",
             ),
             (
-                ":artifact -- Artifact ID (repo/artifact) to adopt into:_default",
-                ":artifact -- Artifact ID (repo/artifact) to adopt into:__dotted_artifacts_dynamic",
+                ":artifact -- Artifact ID (repository/artifact) to adopt into:_default",
+                ":artifact -- Artifact ID (repository/artifact) to adopt into:__dotted_artifacts_dynamic",
             ),
             (
-                ":artifact -- Artifact ID (repo/artifact) to adopt package into:_default",
-                ":artifact -- Artifact ID (repo/artifact) to adopt package into:__dotted_artifacts_dynamic",
+                ":artifact -- Artifact ID (repository/artifact) to adopt package into:_default",
+                ":artifact -- Artifact ID (repository/artifact) to adopt package into:__dotted_artifacts_dynamic",
             ),
         ] {
             output = output.replace(description, helper);
         }
         output = output.replace(
-            "::artifact -- Artifact ID (repo/artifact) to disable:",
+            "::artifact -- Artifact ID (repository/artifact) to disable:",
             "::artifact:__dotted_artifacts_enabled",
         );
         output.push_str(

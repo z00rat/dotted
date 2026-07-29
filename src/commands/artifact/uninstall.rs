@@ -12,7 +12,7 @@
 /// - Identifies which target files/paths exist and determines if they can be safely removed:
 ///   - Deployed files are only removed if their content matches the original source bytes (otherwise they are skipped to prevent overwriting user edits).
 ///   - Additional files/directories listed under the artifact's `bin.config.remove` block are removed recursively.
-/// - Backs up all removed files/folders before deletion.
+/// - Backs up all removed files and folders before deletion.
 /// - Analyzes which installed dependencies (packages, Flatpaks, or downloads) are no longer claimed by another enabled artifact and prints cleanup hints; it never removes them automatically.
 /// - Automatically calls `artifact disable` at the end to disable the artifact in settings.
 use color_eyre::eyre::{Result, bail};

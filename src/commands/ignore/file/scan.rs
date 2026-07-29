@@ -13,10 +13,10 @@
 use color_eyre::eyre::Result;
 use std::path::PathBuf;
 
-use crate::cli::LsArgs;
+use crate::cli::{FileFilter, LsArgs};
 use crate::types::Runtime;
 
-pub fn run(runtime: &Runtime, path: Option<PathBuf>, filter: Option<String>) -> Result<()> {
+pub fn run(runtime: &Runtime, path: Option<PathBuf>, filter: Option<FileFilter>) -> Result<()> {
     let args = LsArgs {
         depth: Some(0), // 0 means unlimited
         path,

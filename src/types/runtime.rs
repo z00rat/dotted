@@ -63,7 +63,9 @@ impl Runtime {
         let distro = cli
             .distro
             .clone()
-            .unwrap_or_else(crate::plan::detect_distro);
+            .map_or_else(crate::plan::detect_distro, |distro| {
+                distro.as_str().to_owned()
+            });
         let no_color = cli.no_color;
 
         Ok(Self {

@@ -14,8 +14,8 @@
 /// - Displays the list of missing files first.
 /// - Renders colorful side-by-side/inline diff blocks for all changed files.
 use color_eyre::eyre::Result;
-use std::fs;
 
+use crate::commands::deploy::files;
 use crate::plan::build_plan;
 use crate::types::Runtime;
 use crate::utils::{show_file_diff, style};
@@ -39,13 +39,10 @@ pub fn run(runtime: &Runtime, artifact: Option<&str>, filter: Option<&str>) -> R
         if !matches_filter(&file.artifact_id) && !matches_filter(&path_str) {
             continue;
         }
-        if file.target.exists() {
-            let current = fs::read(&file.target)?;
-            if current != file.bytes {
-                changed_files.push((file, current));
-            }
-        } else {
-            missing_files.push(file);
+        match files::read_current(file)? {
+            Some(current) if current != file.bytes => changed_files.push((file, current)),
+            Some(_) => {}
+            None => missing_files.push(file),
         }
     }
 

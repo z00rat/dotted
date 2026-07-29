@@ -1,6 +1,6 @@
 [package]
 name = "dotted"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2024"
 license = "AGPL-3.0-only"
 description = "A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages & services."
@@ -48,7 +48,7 @@ undocumented_unsafe_blocks = "deny"
 [package.metadata.release]
 tag-message = "v{{version}}"
 tag-name = "v{{version}}"
-push = true
+push = false
 publish = false
 pre-release-commit-message = "chore(release): v{{version}}"
 post-release-commit-message = "chore: post-release v{{next_version}}"

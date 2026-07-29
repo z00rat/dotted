@@ -1,5 +1,9 @@
 /target/
 
+# Local makepkg package artifacts if left in the repo root
+*.pkg.tar
+*.pkg.tar.*
+
 *.mutants
 **/*.rs.bk
 *.swp

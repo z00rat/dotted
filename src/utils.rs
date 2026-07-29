@@ -24,15 +24,19 @@ pub(crate) fn blake2b_hex(bytes: &[u8]) -> String {
 }
 
 pub(crate) fn run_git<const N: usize>(dir: &Path, args: [&str; N]) -> Result<()> {
-    let status = Command::new("git")
+    let output = Command::new("git")
         .args(args)
         .current_dir(dir)
-        .status()
+        .output()
         .wrap_err_with(|| format!("run git in {}", dir.display()))?;
-    if status.success() {
+    if output.status.success() {
         Ok(())
     } else {
-        bail!("git failed in {}", dir.display())
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        if detail.is_empty() {
+            bail!("git failed in {}", dir.display())
+        }
+        bail!("git failed in {}: {detail}", dir.display())
     }
 }
 
@@ -200,9 +204,16 @@ pub(crate) fn command_lines(command: &[&str]) -> Result<BTreeSet<String>> {
     if !command_exists(program) {
         bail!("{program} not found");
     }
-    let output = Command::new(program).args(args).output()?;
+    let output = Command::new(program)
+        .args(args)
+        .output()
+        .wrap_err_with(|| format!("run {program}"))?;
     if !output.status.success() {
-        bail!("{program} failed");
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        if detail.is_empty() {
+            bail!("{program} failed");
+        }
+        bail!("{program} failed: {detail}");
     }
     Ok(String::from_utf8_lossy(&output.stdout)
         .lines()

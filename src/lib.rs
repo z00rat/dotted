@@ -40,15 +40,19 @@ fn run_with_cli(cli: Cli) -> Result<()> {
             WorkspaceCommands::Pull => commands::workspace::pull::run(&runtime),
             WorkspaceCommands::Push => commands::workspace::push::run(&runtime),
             WorkspaceCommands::Cd => commands::workspace::cd::run(&runtime),
-            WorkspaceCommands::Doctor { category } => {
-                commands::workspace::doctor::run(&runtime, category.as_deref())
-            }
+            WorkspaceCommands::Doctor { category } => commands::workspace::doctor::run(
+                &runtime,
+                category.as_ref().map(crate::cli::DoctorCategory::as_str),
+            ),
             WorkspaceCommands::Format => commands::workspace::format::run(&runtime),
         },
         Commands::Artifact(sub) => match sub {
-            ArtifactCommands::List { filter, raw, state } => {
-                commands::artifact::list::run(&runtime, filter.as_deref(), raw, state.as_deref())
-            }
+            ArtifactCommands::List { filter, raw, state } => commands::artifact::list::run(
+                &runtime,
+                filter.as_deref(),
+                raw,
+                state.as_ref().map(crate::cli::ArtifactState::as_str),
+            ),
             ArtifactCommands::Show { artifact } => {
                 commands::artifact::show::run(&runtime, &artifact)
             }
@@ -73,7 +77,12 @@ fn run_with_cli(cli: Cli) -> Result<()> {
                 artifact,
                 package,
                 package_type,
-            } => commands::adopt::package::run(&runtime, &artifact, package, package_type),
+            } => commands::adopt::package::run(
+                &runtime,
+                &artifact,
+                package,
+                package_type.map(|value| value.as_str().to_owned()),
+            ),
             AdoptCommands::Service {
                 artifact,
                 scope_or_service,
@@ -81,16 +90,19 @@ fn run_with_cli(cli: Cli) -> Result<()> {
             } => commands::adopt::service::run(&runtime, &artifact, scope_or_service, services),
         },
         Commands::Deploy(sub) => match sub {
-            DeployCommands::Status { artifact, filter } => {
-                commands::deploy::status::run(&runtime, artifact.as_deref(), filter.as_deref())
-            }
+            DeployCommands::Status { artifact, filter } => commands::deploy::status::run(
+                &runtime,
+                artifact.as_deref(),
+                filter.as_ref().map(crate::cli::StatusFilter::as_str),
+            ),
             DeployCommands::Diff { artifact } => {
                 commands::deploy::diff::run(&runtime, artifact.as_deref(), None)
             }
             DeployCommands::Apply(args) => commands::deploy::apply::run(&runtime, &args),
-            DeployCommands::Orphans { filter } => {
-                commands::deploy::orphans::run(&runtime, filter.as_deref())
-            }
+            DeployCommands::Orphans { filter } => commands::deploy::orphans::run(
+                &runtime,
+                filter.as_ref().map(crate::cli::OrphanFilter::as_str),
+            ),
         },
         Commands::Repo(sub) => match sub {
             RepoCommands::List => commands::repo::list::run(&runtime),

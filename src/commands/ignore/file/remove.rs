@@ -4,7 +4,7 @@
 /// Removes one or more file or directory path entries from the user's global settings ignore lists.
 ///
 /// Variations:
-/// 1. `paths` provided: Directly searches and removes matching file/folder entries from settings.
+/// 1. `paths` provided: Directly searches and removes matching file or folder entries from settings.
 /// 2. `paths` empty: Displays an interactive selection menu containing all current file and directory ignore rules.
 ///
 /// Decisions & Logic Branches:
@@ -37,7 +37,7 @@ pub fn run(runtime: &Runtime, paths: &[PathBuf]) -> Result<()> {
             .collect();
 
         if all_entries.is_empty() {
-            println!("Ignored files/folders list is empty.");
+            println!("The ignored files or folders list is empty.");
             return Ok(());
         }
 
@@ -62,7 +62,7 @@ pub fn run(runtime: &Runtime, paths: &[PathBuf]) -> Result<()> {
                 println!("Invalid selection.");
             }
         } else {
-            let mut select = cliclack::select("Select file/folder ignore entry to remove:");
+            let mut select = cliclack::select("Select a file or folder ignore entry to remove:");
             for (idx, entry) in all_entries.iter().enumerate() {
                 select = select.item(idx, entry, "");
             }

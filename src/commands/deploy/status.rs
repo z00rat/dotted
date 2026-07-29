@@ -15,8 +15,8 @@
 ///   - Marks non-existent files as `[new]`.
 /// - Prints the status of environment variables, packages, flatpaks, and downloads matching the filter.
 use color_eyre::eyre::Result;
-use std::fs;
 
+use crate::commands::deploy::files::{self, FileChange};
 use crate::commands::lib::print_plan_extras;
 use crate::plan::build_plan;
 use crate::types::Runtime;
@@ -27,32 +27,112 @@ fn print_artifact_files_status(
     plan: &crate::types::Plan,
     art_id: &str,
     indent: &str,
-) {
+) -> Result<()> {
     let art_files: Vec<_> = plan
         .files
         .iter()
         .filter(|f| f.artifact_id == art_id)
         .collect();
     for file in art_files {
-        if file.target.exists() {
-            let current = fs::read(&file.target).unwrap_or_default();
-            if current == file.bytes {
-                continue;
-            }
-            println!(
+        match files::classify(file)? {
+            Some(FileChange::Changed) => println!(
                 "{indent}{} {} -> {}",
                 style("[change]", "33", runtime),
                 runtime.display_path(&file.source).display(),
                 runtime.display_path(&file.display_target).display()
-            );
-        } else {
-            println!(
+            ),
+            Some(FileChange::New) => println!(
                 "{indent}{} {} -> {}",
                 style("[new]", "32", runtime),
                 runtime.display_path(&file.source).display(),
                 runtime.display_path(&file.display_target).display()
-            );
+            ),
+            None => {}
         }
+    }
+    Ok(())
+}
+
+fn print_artifact_environment(artifact: &crate::types::Artifact) {
+    if artifact.bin.env.is_empty() {
+        return;
+    }
+    println!("    env:");
+    for (key, value) in &artifact.bin.env {
+        println!("      {key} = \"{value}\"");
+    }
+}
+
+fn print_artifact_packages(runtime: &Runtime, artifact: &crate::types::Artifact) {
+    if artifact.bin.distro.is_empty() && artifact.bin.flatpak.packages.is_empty() {
+        return;
+    }
+    println!("    packages:");
+    for (distro, package_set) in &artifact.bin.distro {
+        for package in &package_set.packages {
+            let tag = if crate::utils::is_package_installed(distro, package) {
+                style("[installed]", "34", runtime)
+            } else {
+                style("[missing]", "32", runtime)
+            };
+            println!("      {tag} native ({distro}): {package}");
+        }
+    }
+    for flatpak in &artifact.bin.flatpak.packages {
+        let tag = if crate::utils::is_flatpak_installed(flatpak) {
+            style("[installed]", "34", runtime)
+        } else {
+            style("[missing]", "32", runtime)
+        };
+        println!("      {tag} flatpak: {flatpak}");
+    }
+}
+
+fn print_artifact_services(runtime: &Runtime, artifact: &crate::types::Artifact) {
+    if artifact.bin.services.is_empty() {
+        return;
+    }
+    println!("    services:");
+    for (scope, service_set) in &artifact.bin.services {
+        if service_set.units.is_empty() {
+            continue;
+        }
+        println!("      {scope}:");
+        for unit in &service_set.units {
+            let enabled = crate::utils::is_service_enabled(scope, unit);
+            let active = crate::utils::is_service_active(scope, unit);
+            let status = match (enabled, active) {
+                (true, true) => style("[active & enabled]", "34", runtime),
+                (true, false) => style("[inactive & enabled]", "33", runtime),
+                (false, true) => style("[active & disabled]", "33", runtime),
+                (false, false) => style("[disabled]", "32", runtime),
+            };
+            println!("        {status} {unit}");
+        }
+    }
+}
+
+fn print_artifact_downloads(runtime: &Runtime, plan: &crate::types::Plan, artifact_id: &str) {
+    let downloads: Vec<_> = plan
+        .downloads
+        .iter()
+        .filter(|download| download.artifact_id == artifact_id)
+        .collect();
+    if downloads.is_empty() {
+        return;
+    }
+    println!("    downloads:");
+    for download in downloads {
+        let tag = if download.install_path.exists() {
+            style("[installed]", "34", runtime)
+        } else {
+            style("[missing]", "32", runtime)
+        };
+        println!(
+            "      {tag} {} -> {}",
+            download.url_or_zip_url(),
+            download.display_path.display()
+        );
     }
 }
 
@@ -60,98 +140,34 @@ fn print_artifacts_section(
     runtime: &Runtime,
     plan: &crate::types::Plan,
     show: impl Fn(&str) -> bool,
-) {
+) -> Result<()> {
     println!("artifacts:");
-    for art in &plan.artifacts {
+    for artifact in &plan.artifacts {
         println!(
             "  {} r{} ({}) - {}",
-            style(&art.id, "36;1", runtime),
-            art.revision,
-            art.name,
-            art.description
+            style(&artifact.id, "36;1", runtime),
+            artifact.revision,
+            artifact.name,
+            artifact.description
         );
-
-        if show("files") {
-            let has_file_changes = plan
-                .files
-                .iter()
-                .filter(|f| f.artifact_id == art.id)
-                .any(|f| !f.target.exists() || fs::read(&f.target).unwrap_or_default() != f.bytes);
-            if has_file_changes {
-                println!("    files:");
-                print_artifact_files_status(runtime, plan, &art.id, "      ");
-            }
+        if show("files") && files::has_changes(plan, &artifact.id)? {
+            println!("    files:");
+            print_artifact_files_status(runtime, plan, &artifact.id, "      ")?;
         }
-
-        if show("env") && !art.bin.env.is_empty() {
-            println!("    env:");
-            for (k, v) in &art.bin.env {
-                println!("      {k} = \"{v}\"");
-            }
+        if show("env") {
+            print_artifact_environment(artifact);
         }
-
-        if show("packages") && (!art.bin.distro.is_empty() || !art.bin.flatpak.packages.is_empty())
-        {
-            println!("    packages:");
-            for (distro, pkg_set) in &art.bin.distro {
-                for pkg in &pkg_set.packages {
-                    let installed = crate::utils::is_package_installed(distro, pkg);
-                    let tag = if installed {
-                        style("[installed]", "34", runtime)
-                    } else {
-                        style("[missing]", "32", runtime)
-                    };
-                    println!("      {tag} native ({distro}): {pkg}");
-                }
-            }
-            for flatpak in &art.bin.flatpak.packages {
-                let installed = crate::utils::is_flatpak_installed(flatpak);
-                let tag = if installed {
-                    style("[installed]", "34", runtime)
-                } else {
-                    style("[missing]", "32", runtime)
-                };
-                println!("      {tag} flatpak: {flatpak}");
-            }
+        if show("packages") {
+            print_artifact_packages(runtime, artifact);
         }
-
-        if show("services") && !art.bin.services.is_empty() {
-            println!("    services:");
-            for (scope, service_set) in &art.bin.services {
-                if !service_set.units.is_empty() {
-                    println!("      {scope}:");
-                    for unit in &service_set.units {
-                        let enabled = crate::utils::is_service_enabled(scope, unit);
-                        let active = crate::utils::is_service_active(scope, unit);
-                        let status_str = match (enabled, active) {
-                            (true, true) => style("[active & enabled]", "34", runtime),
-                            (true, false) => style("[inactive & enabled]", "33", runtime),
-                            (false, true) => style("[active & disabled]", "33", runtime),
-                            (false, false) => style("[disabled]", "32", runtime),
-                        };
-                        println!("        {status_str} {unit}");
-                    }
-                }
-            }
+        if show("services") {
+            print_artifact_services(runtime, artifact);
         }
-
-        if show("downloads") && plan.downloads.iter().any(|d| d.artifact_id == art.id) {
-            println!("    downloads:");
-            for download in plan.downloads.iter().filter(|d| d.artifact_id == art.id) {
-                let installed = download.install_path.exists();
-                let tag = if installed {
-                    style("[installed]", "34", runtime)
-                } else {
-                    style("[missing]", "32", runtime)
-                };
-                println!(
-                    "      {tag} {} -> {}",
-                    download.url_or_zip_url(),
-                    download.display_path.display()
-                );
-            }
+        if show("downloads") {
+            print_artifact_downloads(runtime, plan, &artifact.id);
         }
     }
+    Ok(())
 }
 
 pub fn run(runtime: &Runtime, artifact: Option<&str>, filter: Option<&str>) -> Result<()> {
@@ -169,31 +185,27 @@ pub fn run(runtime: &Runtime, artifact: Option<&str>, filter: Option<&str>) -> R
     println!();
 
     if show("artifacts") {
-        print_artifacts_section(runtime, &plan, show);
+        print_artifacts_section(runtime, &plan, show)?;
     } else {
         if show("files") {
             println!("files:");
             for file in &plan.files {
-                if file.target.exists() {
-                    let current = fs::read(&file.target).unwrap_or_default();
-                    if current == file.bytes {
-                        continue;
-                    }
-                    println!(
+                match files::classify(file)? {
+                    Some(FileChange::Changed) => println!(
                         "  {} {} {} -> {}",
                         style("[change]", "33", runtime),
                         file.artifact_id,
                         runtime.display_path(&file.source).display(),
                         runtime.display_path(&file.display_target).display()
-                    );
-                } else {
-                    println!(
+                    ),
+                    Some(FileChange::New) => println!(
                         "  {} {} {} -> {}",
                         style("[new]", "32", runtime),
                         file.artifact_id,
                         runtime.display_path(&file.source).display(),
                         runtime.display_path(&file.display_target).display()
-                    );
+                    ),
+                    None => {}
                 }
             }
         }

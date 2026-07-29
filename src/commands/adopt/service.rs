@@ -51,11 +51,13 @@ fn prompt_services(runtime: &Runtime, services: Vec<String>) -> Result<Vec<Strin
             .filter(|s| !s.is_empty())
             .collect();
         if units.is_empty() {
-            bail!("adopt service requires at least one service unit name");
+            bail!("The adopt service command requires at least one service unit name.");
         }
         Ok(units)
     } else {
-        bail!("adopt service requires service unit name(s) when running non-interactively");
+        bail!(
+            "The adopt service command requires service unit names when running non-interactively."
+        );
     }
 }
 

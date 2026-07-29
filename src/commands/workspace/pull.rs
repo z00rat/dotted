@@ -1,16 +1,16 @@
 /// CLI Command: `workspace pull`
 ///
 /// What it does:
-/// Syncs/pulls changes for the dotted repository itself and any configured package/dotfile repositories from their remotes.
+/// Syncs and pulls changes for the Dotted repository itself and any configured package or dotfile repositories from their remotes.
 ///
 /// Variations:
 /// None (standard execution).
 ///
 /// Decisions & Logic Branches:
-/// - Exits early if no Git remote is configured for either the dotted repo or any repository.
+/// - Exits early if no Git remote is configured for either the Dotted repository or any repository.
 /// - Runs without confirmation.
-/// - For the dotted repository (if it is a git repo): Pulls changes via `git pull --ff-only`.
-/// - For each package repository configured in `dotted.toml`:
+/// - For the Dotted repository (if it is a Git repository): Pulls changes via `git pull --ff-only`.
+/// - For each package repository configured in `[dotted].toml`:
 ///   - If it has a remote URL:
 ///     - Clones the repository if the local folder doesn't exist.
 ///     - Pulls changes via `git pull --ff-only` if the local folder exists.
@@ -34,12 +34,12 @@ pub fn run(runtime: &Runtime) -> Result<()> {
     println!("Plan to sync the following repositories:");
     if meta_git {
         println!(
-            "  - dotted repo (pull) -> {}",
+            "  - Dotted repository (pull) -> {}",
             runtime.display_path(&runtime.dotted_dir).display()
         );
     } else {
         println!(
-            "  - dotted repo (local, not git) -> {}",
+            "  - Dotted repository (local, not Git) -> {}",
             runtime.display_path(&runtime.dotted_dir).display()
         );
     }
@@ -48,14 +48,14 @@ pub fn run(runtime: &Runtime) -> Result<()> {
         let url = &repo.url;
         if path.exists() {
             println!(
-                "  - repo {} (pull from {}) -> {}",
+                "  - repository {} (pull from {}) -> {}",
                 repo.name,
                 url,
                 runtime.display_path(&path).display()
             );
         } else {
             println!(
-                "  - repo {} (clone from {}) -> {}",
+                "  - repository {} (clone from {}) -> {}",
                 repo.name,
                 url,
                 runtime.display_path(&path).display()

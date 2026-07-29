@@ -1,22 +1,17 @@
-use color_eyre::eyre::{Result, WrapErr, anyhow, bail};
+use color_eyre::eyre::{Result, anyhow, bail};
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
-use std::fmt::Write as _;
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::plan::{normalize_arch, plan_download};
 use crate::types::{
-    ABOUT_TOML, AboutEntry, AboutFile, Artifact, DottedFile, Plan, PlannedFile, RepoConfig,
-    Runtime, SETTINGS_DIR,
+    ABOUT_TOML, AboutEntry, AboutFile, Artifact, DottedFile, Plan, RepoConfig, Runtime,
+    SETTINGS_DIR,
 };
-use crate::utils::{
-    backup_file, command_lines, confirm, native_package_command, preserve_source_permissions,
-    run_git, show_file_diff, style,
-};
+use crate::utils::{command_lines, run_git, style};
 
 pub(crate) fn load_dotted(runtime: &Runtime) -> Result<DottedFile> {
     let mut dotted: DottedFile = crate::types::read_toml(&runtime.dotted_path())?;
@@ -79,7 +74,7 @@ pub(crate) fn checkout_repo(path: &Path, repo: &RepoConfig) -> Result<()> {
 
 pub(crate) fn commit_and_push(path: &Path, message: &str) -> Result<()> {
     if !path.join(".git").exists() {
-        println!("skip non-git repo {}", path.display());
+        println!("Skipping non-Git repository {}", path.display());
         return Ok(());
     }
     run_git(path, ["add", "."])?;
@@ -88,7 +83,7 @@ pub(crate) fn commit_and_push(path: &Path, message: &str) -> Result<()> {
         .current_dir(path)
         .output()?;
     if status.stdout.is_empty() {
-        println!("nothing to commit in {}", path.display());
+        println!("Nothing to commit in {}", path.display());
         return Ok(());
     }
     run_git(path, ["commit", "-m", message])?;
@@ -102,368 +97,120 @@ pub(crate) fn commit_and_push(path: &Path, message: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn print_plan_extras(runtime: &Runtime, plan: &Plan, filter: Option<&str>) {
-    let show = |section: &str| filter.is_none_or(|f| f == section);
+fn show_section(filter: Option<&str>, section: &str) -> bool {
+    filter.is_none_or(|value| value == section)
+}
 
-    if show("env") && !plan.env.is_empty() {
-        let env_keys: Vec<_> = plan.env.keys().collect();
-        if !env_keys.is_empty() {
-            println!();
-            println!("env:");
-            for key in env_keys {
-                if let Some(val) = plan.env.get(key) {
-                    println!("  {key} = \"{val}\"");
-                }
-            }
+fn print_plan_environment(plan: &Plan, filter: Option<&str>) {
+    if show_section(filter, "env") && !plan.env.is_empty() {
+        println!();
+        println!("env:");
+        for (key, value) in &plan.env {
+            println!("  {key} = \"{value}\"");
         }
     }
     if !plan.env_overrides.is_empty() {
-        let overrides = plan.env_overrides.clone();
-        if !overrides.is_empty() {
-            println!("env overrides: {}", overrides.join(", "));
-        }
-    }
-    if (show("packages") && !plan.packages.is_empty())
-        || (show("downloads") && (!plan.flatpaks.is_empty() || !plan.downloads.is_empty()))
-        || (show("services") && !plan.services.is_empty())
-    {
-        println!();
-        if show("services") && !show("packages") && !show("downloads") {
-            println!("services:");
-        } else {
-            println!("packages/downloads/services:");
-        }
-        if show("packages") {
-            for (distro, packages) in &plan.packages {
-                for pkg in packages {
-                    let installed = crate::utils::is_package_installed(distro, pkg);
-                    let (prefix, color) = if installed {
-                        ("[installed]", "34") // Blue (highly visible)
-                    } else {
-                        ("[missing]", "32") // Green
-                    };
-                    let padded_prefix = format!("{prefix:<11}");
-                    let status_tag = style(&padded_prefix, color, runtime);
-                    println!("  {status_tag} native {pkg}");
-                }
-            }
-        }
-        if show("downloads") {
-            for flatpak in &plan.flatpaks {
-                let installed = crate::utils::is_flatpak_installed(flatpak);
-                let (prefix, color) = if installed {
-                    ("[installed]", "34")
-                } else {
-                    ("[missing]", "32")
-                };
-                let padded_prefix = format!("{prefix:<11}");
-                let status_tag = style(&padded_prefix, color, runtime);
-                println!("  {status_tag} flatpak             {flatpak}");
-            }
-            for download in &plan.downloads {
-                let installed = download.install_path.exists();
-                let (prefix, color) = if installed {
-                    ("[installed]", "34")
-                } else {
-                    ("[missing]", "32")
-                };
-                let padded_prefix = format!("{prefix:<11}");
-                let status_tag = style(&padded_prefix, color, runtime);
-                let url = download.url_or_zip_url();
-                println!(
-                    "  {} download  {} -> {}",
-                    status_tag,
-                    url,
-                    download.display_path.display()
-                );
-            }
-        }
-        if show("services") {
-            for (scope, service_set) in &plan.services {
-                for unit in service_set {
-                    let enabled = crate::utils::is_service_enabled(scope, unit);
-                    let active = crate::utils::is_service_active(scope, unit);
-                    let status_str = match (enabled, active) {
-                        (true, true) => style("[active & enabled]", "34", runtime),
-                        (true, false) => style("[inactive & enabled]", "33", runtime),
-                        (false, true) => style("[active & disabled]", "33", runtime),
-                        (false, false) => style("[disabled]", "32", runtime),
-                    };
-                    println!("  {status_str} service ({scope}) {unit}");
-                }
-            }
-        }
+        println!("env overrides: {}", plan.env_overrides.join(", "));
     }
 }
 
-pub(crate) fn write_file_as_root(target: &Path, bytes: &[u8]) -> Result<()> {
-    let mut child = Command::new("sudo")
-        .args(["tee", &target.to_string_lossy()])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .spawn()?;
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(bytes)?;
-    }
-    let status = child.wait()?;
-    if status.success() {
-        Ok(())
-    } else {
-        bail!("failed to write as root to {}", target.display())
-    }
-}
-
-fn resolve_conflict(runtime: &Runtime, file: &PlannedFile) -> Result<&'static str> {
-    if runtime.no_color {
-        loop {
-            print!(
-                "Conflict in {}! [r]ight (deploy new), [l]eft (keep current), [u]pdate repo, [a]bort? ",
-                file.display_target.display()
-            );
-            std::io::Write::flush(&mut std::io::stdout())?;
-            let mut line = String::new();
-            std::io::stdin().read_line(&mut line)?;
-            let choice = line.trim().to_ascii_lowercase();
-            match choice.as_str() {
-                "r" | "right" => return Ok("right"),
-                "l" | "left" => return Ok("left"),
-                "u" | "update" | "repo" => return Ok("update_repo"),
-                "a" | "abort" => return Ok("abort"),
-                _ => {
-                    println!("invalid choice. Please enter 'r', 'l', 'u', or 'a'.");
-                }
-            }
-        }
-    } else {
-        cliclack::select(format!(
-            "Conflict in file write for {}",
-            file.display_target.display()
-        ))
-        .item("right", "Right (deploy new / overwrite target)", "")
-        .item("left", "Left (keep current target / skip)", "")
-        .item(
-            "update_repo",
-            "Update repo (overwrite repo file with target)",
-            "",
-        )
-        .item("abort", "Abort deployment", "")
-        .interact()
-        .map_err(|e| color_eyre::eyre::Report::msg(e.to_string()))
-    }
-}
-
-pub(crate) fn apply_file(runtime: &Runtime, file: &PlannedFile, yes: bool) -> Result<()> {
-    if let Some(parent) = file.target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    if file.target.exists() {
-        let current = fs::read(&file.target)?;
-        if current == file.bytes {
-            println!(
-                "{} {}",
-                style("same", "32", runtime),
-                file.display_target.display()
-            );
-            return Ok(());
-        }
-        if !yes {
-            show_file_diff(file, &current, runtime);
-            let action = resolve_conflict(runtime, file)?;
-
-            if !runtime.no_color {
-                print!("\x1B[2J\x1B[H");
-                let _ = std::io::stdout().flush();
-            }
-
-            match action {
-                "right" => {}
-                "left" => {
-                    println!(
-                        "{} {}",
-                        style("skip", "33", runtime),
-                        file.display_target.display()
-                    );
-                    return Ok(());
-                }
-                "update_repo" => {
-                    fs::write(&file.source, &current)?;
-                    println!(
-                        "{} {}",
-                        style("updated repo", "32", runtime),
-                        runtime.display_path(&file.source).display()
-                    );
-                    return Ok(());
-                }
-                _ => {
-                    bail!(
-                        "aborted by user due to conflict in {}",
-                        file.display_target.display()
-                    );
-                }
-            }
-        }
-        backup_file(runtime, &file.target, &file.display_target)?;
-    } else if let (false, Some(text)) = (yes, &file.text) {
-        crate::utils::print_new_file_content(&file.display_target.to_string_lossy(), text, runtime);
-    }
-    let write_res = fs::write(&file.target, &file.bytes);
-    if let Err(e) = write_res {
-        if e.kind() == std::io::ErrorKind::PermissionDenied {
-            println!("Permission denied for {}.", file.display_target.display());
-            if yes
-                || confirm(
-                    "Attempt to write as root with sudo? [y/N] ",
-                    runtime.no_color,
-                )?
-            {
-                write_file_as_root(&file.target, &file.bytes)?;
-            } else {
-                return Err(e).wrap_err(format!("write {}", file.display_target.display()));
-            }
-        } else {
-            return Err(e).wrap_err(format!("write {}", file.display_target.display()));
-        }
-    }
-    preserve_source_permissions(&file.source, &file.target)?;
-    println!(
-        "{} {}",
-        style("wrote", "32;1", runtime),
-        file.display_target.display()
-    );
-    Ok(())
-}
-
-pub(crate) fn apply_packages_and_downloads(
-    runtime: &Runtime,
-    plan: &Plan,
-    _yes: bool,
-) -> Result<bool> {
-    let mut command_lines_to_show = Vec::new();
-    let dotted = load_dotted(runtime).ok();
-    let default_commands = std::collections::HashMap::new();
-    let package_commands = dotted
-        .as_ref()
-        .map_or(&default_commands, |d| &d.config.package_commands);
-
+fn print_plan_packages(runtime: &Runtime, plan: &Plan) {
     for (distro, packages) in &plan.packages {
-        let missing: BTreeSet<String> = packages
-            .iter()
-            .filter(|pkg| !crate::utils::is_package_installed(distro, pkg))
-            .cloned()
-            .collect();
-        if missing.is_empty() {
-            continue;
+        for package in packages {
+            let (label, color) = if crate::utils::is_package_installed(distro, package) {
+                ("[installed]", "34")
+            } else {
+                ("[missing]", "32")
+            };
+            let status = style(&format!("{label:<11}"), color, runtime);
+            println!("  {status} native {package}");
         }
-        let command = native_package_command(distro, &missing, package_commands)?;
-        let joined = crate::utils::shell_join(&command);
-        println!("native packages ({distro}): {joined}");
-        command_lines_to_show.push(joined);
     }
-    let missing_flatpaks: BTreeSet<String> = plan
-        .flatpaks
-        .iter()
-        .filter(|flatpak| !crate::utils::is_flatpak_installed(flatpak))
-        .cloned()
-        .collect();
-    if !missing_flatpaks.is_empty() {
-        let mut command = vec![
-            "flatpak".to_string(),
-            "install".to_string(),
-            "-y".to_string(),
-        ];
-        command.extend(missing_flatpaks);
-        let joined = crate::utils::shell_join(&command);
-        println!("flatpaks: {joined}");
-        command_lines_to_show.push(joined);
+}
+
+fn print_plan_downloads(runtime: &Runtime, plan: &Plan) {
+    for flatpak in &plan.flatpaks {
+        let (label, color) = if crate::utils::is_flatpak_installed(flatpak) {
+            ("[installed]", "34")
+        } else {
+            ("[missing]", "32")
+        };
+        let status = style(&format!("{label:<11}"), color, runtime);
+        println!("  {status} flatpak             {flatpak}");
     }
     for download in &plan.downloads {
-        if download.install_path.exists() {
-            continue;
-        }
-        let dl_cmd = match &download.source {
-            crate::types::DownloadSource::Url(url) => {
-                format!(
-                    "curl --fail --location --output {} {}",
-                    download.display_path.display(),
-                    url
-                )
-            }
-            crate::types::DownloadSource::Zip { url, path } => {
-                format!(
-                    "curl --fail --location --output archive.zip {} && unzip -p archive.zip {} > {}",
-                    url,
-                    path,
-                    download.display_path.display()
-                )
-            }
+        let (label, color) = if download.install_path.exists() {
+            ("[installed]", "34")
+        } else {
+            ("[missing]", "32")
         };
-        println!("download: {dl_cmd}");
-        command_lines_to_show.push(dl_cmd);
-    }
-    for (scope, service_set) in &plan.services {
-        let mut to_enable = Vec::new();
-        for unit in service_set {
-            if !crate::utils::is_service_enabled(scope, unit) {
-                to_enable.push(unit.clone());
-            }
-        }
-        if !to_enable.is_empty() {
-            let cmd_prefix = if scope == "user" {
-                "systemctl --user enable --now"
-            } else {
-                "sudo systemctl enable --now"
-            };
-            let svc_cmd = format!("{} {}", cmd_prefix, to_enable.join(" "));
-            println!("services ({scope}): {svc_cmd}");
-            command_lines_to_show.push(svc_cmd);
-        }
-    }
-
-    if !command_lines_to_show.is_empty() {
-        println!();
+        let status = style(&format!("{label:<11}"), color, runtime);
         println!(
-            "{}",
-            style(
-                "COMMANDS PLANNED/EXECUTED FOR PACKAGES/DOWNLOADS/SERVICES:",
-                "36;1",
-                runtime
-            )
+            "  {status} download  {} -> {}",
+            download.url_or_zip_url(),
+            download.display_path.display()
         );
-        for cmd in &command_lines_to_show {
-            println!("  {}", style(cmd, "33", runtime));
-        }
     }
-    Ok(!command_lines_to_show.is_empty())
 }
 
-pub(crate) fn write_env_file(runtime: &Runtime, plan: &Plan) -> Result<()> {
-    let dotted = load_dotted(runtime)?;
-    let mut out = String::new();
-    for (key, value) in &plan.env {
-        let _ = writeln!(out, "export {key}={}", shell_escape::escape(value.into()));
-    }
-    for env_path_str in &dotted.config.env_path {
-        let path = runtime.resolve_tilde(env_path_str);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
+fn print_plan_services(runtime: &Runtime, plan: &Plan) {
+    for (scope, service_set) in &plan.services {
+        for unit in service_set {
+            let status = match (
+                crate::utils::is_service_enabled(scope, unit),
+                crate::utils::is_service_active(scope, unit),
+            ) {
+                (true, true) => style("[active & enabled]", "34", runtime),
+                (true, false) => style("[inactive & enabled]", "33", runtime),
+                (false, true) => style("[active & disabled]", "33", runtime),
+                (false, false) => style("[disabled]", "32", runtime),
+            };
+            println!("  {status} service ({scope}) {unit}");
         }
-        fs::write(path, &out)?;
     }
-    Ok(())
+}
+
+pub(crate) fn print_plan_extras(runtime: &Runtime, plan: &Plan, filter: Option<&str>) {
+    print_plan_environment(plan, filter);
+    let packages = show_section(filter, "packages") && !plan.packages.is_empty();
+    let downloads = show_section(filter, "downloads")
+        && (!plan.flatpaks.is_empty() || !plan.downloads.is_empty());
+    let services = show_section(filter, "services") && !plan.services.is_empty();
+    if !(packages || downloads || services) {
+        return;
+    }
+    println!();
+    println!(
+        "{}",
+        if services && !packages && !downloads {
+            "services:"
+        } else {
+            "packages/downloads/services:"
+        }
+    );
+    if packages {
+        print_plan_packages(runtime, plan);
+    }
+    if downloads {
+        print_plan_downloads(runtime, plan);
+    }
+    if services {
+        print_plan_services(runtime, plan);
+    }
 }
 
 pub(crate) fn split_artifact_id(id: &str) -> Result<(&str, &str)> {
     if let Some(name) = id.strip_prefix('/') {
         if name.is_empty() || name.contains('/') {
-            bail!("artifact id must be /artifact or repo/artifact");
+            bail!("Artifact ID must be /artifact or repository/artifact.");
         }
         return Ok(("artifacts", name));
     }
     let (repo, artifact) = id
         .split_once('/')
-        .ok_or_else(|| anyhow!("artifact id must be /artifact or repo/artifact"))?;
+        .ok_or_else(|| anyhow!("Artifact ID must be /artifact or repository/artifact."))?;
     if repo.is_empty() || artifact.is_empty() {
-        bail!("artifact id must be /artifact or repo/artifact");
+        bail!("Artifact ID must be /artifact or repository/artifact.");
     }
     Ok((repo, artifact))
 }
@@ -514,7 +261,7 @@ pub(crate) fn installed_native_packages(distro: &str) -> Result<BTreeSet<String>
         "archlinux" => &["pacman", "-Qqe"],
         "fedora" => &["dnf", "repoquery", "--userinstalled", "--qf", "%{name}"],
         "ubuntu" => &["apt-mark", "showmanual"],
-        other => bail!("unsupported package distro: {other}"),
+        other => bail!("Unsupported package distribution: {other}"),
     };
     command_lines(command)
 }
@@ -567,7 +314,10 @@ pub(crate) fn print_unclaimed_hints(runtime: &Runtime, target: &Claims, other: &
             .filter(|package| crate::utils::is_package_installed(distro, package))
             .collect();
         if !installed.is_empty() {
-            println!("unclaimed native {distro}: {}", installed.join(" "));
+            println!(
+                "Unclaimed native packages ({distro}): {}",
+                installed.join(" ")
+            );
         }
     }
     let unclaimed_flatpaks: Vec<_> = target.1.difference(&other.1).cloned().collect();
@@ -576,13 +326,16 @@ pub(crate) fn print_unclaimed_hints(runtime: &Runtime, target: &Claims, other: &
         .filter(|package| crate::utils::is_flatpak_installed(package))
         .collect();
     if !installed_flatpaks.is_empty() {
-        println!("unclaimed flatpak: {}", installed_flatpaks.join(" "));
+        println!(
+            "Unclaimed Flatpak packages: {}",
+            installed_flatpaks.join(" ")
+        );
     }
     let unclaimed_downloads: Vec<_> = target.2.difference(&other.2).collect();
     for path in unclaimed_downloads {
         if path.exists() {
             println!(
-                "unclaimed download: {}",
+                "Unclaimed download: {}",
                 runtime.display_path(path).display()
             );
         }
@@ -616,7 +369,7 @@ pub(crate) fn restore_one(source: &Path, target: &Path) -> Result<()> {
         fs::create_dir_all(parent)?;
     }
     fs::copy(source, target)?;
-    println!("restored {}", target.display());
+    println!("Restored {}", target.display());
     Ok(())
 }
 
