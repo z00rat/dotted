@@ -14,8 +14,7 @@ ENV HOME=/home/user1
 ENV LANG=en_US.UTF-8
 WORKDIR /home/user1
 
-
-# Configure fish aliases
+# Configure fish aliases and integrations
 RUN mkdir -p /home/user1/.config/fish && \
     printf "%s\n" \
     "alias l 'eza --color=auto -lA --icons=auto --smart-group --time-style=relative'" \
@@ -26,6 +25,7 @@ RUN mkdir -p /home/user1/.config/fish && \
     "alias cp 'cp -v'" \
     "alias diff 'diff --color=auto'" \
     "alias fgrep 'fgrep --color=auto'" \
+    "zoxide init fish | source" \
     >> /home/user1/.config/fish/config.fish
 
 RUN xdg-user-dirs-update

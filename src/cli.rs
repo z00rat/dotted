@@ -7,7 +7,7 @@ use std::path::PathBuf;
 #[command(
     name = "dotted",
     version,
-    about = "A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages."
+    about = "A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages & services."
 )]
 pub struct Cli {
     #[arg(long, global = true, hide = true, env = "DOTTED_DIR")]
@@ -40,8 +40,8 @@ pub(crate) enum Commands {
     Deploy(DeployCommands),
     #[command(subcommand, about = "Repository management")]
     Repo(RepoCommands),
-    #[command(subcommand, about = "File audit & management")]
-    Files(FilesCommands),
+    #[command(subcommand, about = "Ignore rules management")]
+    Ignore(IgnoreCommands),
     #[command(subcommand, about = "Backup & restore management")]
     Backup(BackupCommands),
     #[command(subcommand, about = "Shell environments & completions")]
@@ -66,6 +66,8 @@ pub(crate) enum WorkspaceCommands {
         #[arg(value_parser = ["config", "repo", "artifact", "tool"], help = "Check category")]
         category: Option<String>,
     },
+    #[command(about = "Format all dotted TOML configuration files in the workspace")]
+    Format,
 }
 
 #[derive(Debug, Subcommand)]
@@ -126,6 +128,15 @@ pub(crate) enum AdoptCommands {
         #[arg(long = "type", value_parser = ["archlinux", "fedora", "ubuntu", "flatpak"], help = "Package type")]
         package_type: Option<String>,
     },
+    #[command(about = "Adopt a systemd service unit")]
+    Service {
+        #[arg(help = "Artifact ID (repo/artifact) to adopt service into")]
+        artifact: String,
+        #[arg(help = "Service scope ('user' or 'system') or service unit name")]
+        scope_or_service: Option<String>,
+        #[arg(help = "Additional service unit name(s) to add")]
+        services: Vec<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -134,7 +145,7 @@ pub(crate) enum DeployCommands {
     Status {
         #[arg(help = "Filter status to a specific artifact")]
         artifact: Option<String>,
-        #[arg(short, long, value_parser = ["artifacts", "files", "env", "packages", "downloads"], help = "Status category")]
+        #[arg(short, long, value_parser = ["artifacts", "files", "env", "packages", "downloads", "services"], help = "Status category")]
         filter: Option<String>,
     },
     #[command(about = "Show differences between rendered files and active system files")]
@@ -144,9 +155,9 @@ pub(crate) enum DeployCommands {
     },
     #[command(about = "Apply changes to system files and install dependencies")]
     Apply(ApplyArgs),
-    #[command(about = "List packages and downloads not declared by active artifacts")]
+    #[command(about = "List packages, downloads, and services not declared by active artifacts")]
     Orphans {
-        #[arg(short, long, value_parser = ["native", "flatpak", "downloads"], help = "Package category")]
+        #[arg(short, long, value_parser = ["native", "flatpak", "downloads", "services"], help = "Category")]
         filter: Option<String>,
     },
 }
@@ -175,7 +186,27 @@ pub(crate) enum RepoCommands {
 }
 
 #[derive(Debug, Subcommand)]
-pub(crate) enum FilesCommands {
+pub(crate) enum IgnoreCommands {
+    #[command(subcommand, about = "Manage ignored files and directories")]
+    File(IgnoreFileCommands),
+    #[command(subcommand, about = "Manage ignored system packages")]
+    Package(IgnorePackageCommands),
+    #[command(subcommand, about = "Manage ignored systemd services")]
+    Service(IgnoreServiceCommands),
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum IgnoreFileCommands {
+    #[command(about = "Add one or more file or directory paths to ignore list")]
+    Add {
+        #[arg(help = "Path(s) to add to settings [ignore]")]
+        paths: Vec<PathBuf>,
+    },
+    #[command(about = "Remove one or more file or directory paths from ignore list")]
+    Remove {
+        #[arg(help = "Path(s) to remove from settings [ignore]")]
+        paths: Vec<PathBuf>,
+    },
     #[command(name = "list", about = "List tracked, untracked, and ignored files")]
     List(LsArgs),
     #[command(
@@ -185,25 +216,41 @@ pub(crate) enum FilesCommands {
     Scan {
         #[arg(long, help = "Explicit root directory to scan")]
         path: Option<PathBuf>,
-        #[arg(short, long, value_parser = ["tracked", "untracked", "ignored"], help = "File status category")]
+        #[arg(short, long, value_parser = ["tracked", "untracked", "ignored", "partial", "masked"], help = "File status category")]
         filter: Option<String>,
     },
-    #[command(subcommand, about = "Manage globally ignored files and directories")]
-    Ignore(IgnoreCommands),
 }
 
 #[derive(Debug, Subcommand)]
-pub(crate) enum IgnoreCommands {
-    #[command(about = "Add a path to the ignore list")]
+pub(crate) enum IgnorePackageCommands {
+    #[command(about = "Add one or more system packages to ignore list")]
     Add {
-        #[arg(help = "Path to add to settings [ignore]")]
-        path: Option<PathBuf>,
+        #[arg(help = "Package name(s) to add to settings [ignore]")]
+        names: Vec<String>,
     },
-    #[command(about = "Remove a path from the ignore list")]
+    #[command(about = "Remove one or more system packages from ignore list")]
     Remove {
-        #[arg(help = "Path to remove from settings [ignore]")]
-        path: Option<PathBuf>,
+        #[arg(help = "Package name(s) to remove from settings [ignore]")]
+        names: Vec<String>,
     },
+    #[command(about = "List ignored system packages")]
+    List,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum IgnoreServiceCommands {
+    #[command(about = "Add one or more systemd service units to ignore list")]
+    Add {
+        #[arg(help = "Service unit name(s) to add to settings [ignore]")]
+        names: Vec<String>,
+    },
+    #[command(about = "Remove one or more systemd service units from ignore list")]
+    Remove {
+        #[arg(help = "Service unit name(s) to remove from settings [ignore]")]
+        names: Vec<String>,
+    },
+    #[command(about = "List ignored systemd services")]
+    List,
 }
 
 #[derive(Debug, Subcommand)]
@@ -250,7 +297,7 @@ pub(crate) struct LsArgs {
     pub(crate) depth: Option<usize>,
     #[arg(long, help = "Explicit root directory to scan")]
     pub(crate) path: Option<PathBuf>,
-    #[arg(short, long, value_parser = ["tracked", "untracked", "ignored"], help = "File status category")]
+    #[arg(short, long, value_parser = ["tracked", "untracked", "ignored", "partial", "masked"], help = "File status category")]
     pub(crate) filter: Option<String>,
 }
 
@@ -265,12 +312,14 @@ pub(crate) fn completions(shell: Shell) -> color_eyre::Result<()> {
         output.push_str("\n# Dynamic completions for artifacts and repos\n");
         output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from enable' -a '(dotted artifact list --raw --state disabled 2>/dev/null)'\n");
         output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from disable' -a '(dotted artifact list --raw --state enabled 2>/dev/null)'\n");
-        output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from uninstall status diff apply show package' -a '(dotted artifact list --raw 2>/dev/null)'\n");
+        output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from uninstall status diff apply show package service' -a '(dotted artifact list --raw 2>/dev/null)'\n");
         output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from file; and test (count (commandline -opc)) -eq 3' -a '(dotted artifact list --raw 2>/dev/null)'\n");
         output.push_str("complete -c dotted -F -n '__fish_seen_subcommand_from file; and test (count (commandline -opc)) -ge 4' -a '(__fish_complete_path)'\n");
-        output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from doctor' -a 'config repo artifact tool'\n");
-        output.push_str("complete -c dotted -F -n '__fish_seen_subcommand_from ignore; and __fish_seen_subcommand_from add remove'\n");
-        output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from ignore' -n 'not __fish_seen_subcommand_from add remove' -a 'add remove'\n");
+        output.push_str("complete -c dotted -F -n '__fish_seen_subcommand_from ignore; and __fish_seen_subcommand_from file'\n");
+        output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from ignore' -n 'not __fish_seen_subcommand_from file package service' -a 'file package service'\n");
+        output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from ignore; and __fish_seen_subcommand_from file' -n 'not __fish_seen_subcommand_from add remove list scan' -a 'add remove list scan'\n");
+        output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from ignore; and __fish_seen_subcommand_from package' -n 'not __fish_seen_subcommand_from add remove list' -a 'add remove list'\n");
+        output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from ignore; and __fish_seen_subcommand_from service' -n 'not __fish_seen_subcommand_from add remove list' -a 'add remove list'\n");
         output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from repo; and __fish_seen_subcommand_from remove about' -a '(dotted repo list 2>/dev/null | tail -n +4 | head -n -1 | awk \"{print \\$2}\")'\n");
         output.push_str("complete -c dotted -f -n '__fish_seen_subcommand_from artifact; and __fish_seen_subcommand_from create' -a '(dotted repo list 2>/dev/null | tail -n +4 | head -n -1 | awk \"{print \\$2 \\\"/\\\"}\")'\n");
         io::stdout().write_all(output.as_bytes())?;
@@ -288,6 +337,7 @@ pub(crate) fn completions(shell: Shell) -> color_eyre::Result<()> {
             "dotted__subcmd__deploy__subcmd__diff",
             "dotted__subcmd__deploy__subcmd__status",
             "dotted__subcmd__adopt__subcmd__package",
+            "dotted__subcmd__adopt__subcmd__service",
         ] {
             let pattern = format!("{target})\n            opts=\"\"");
             let state = if target.ends_with("__enable") {
@@ -314,7 +364,7 @@ _dotted() {
     local action_idx=-1 action="" state="" i
     for i in "${!COMP_WORDS[@]}"; do
         case "${COMP_WORDS[i]}" in
-            enable|disable|show|uninstall|apply|diff|status|file|package)
+            enable|disable|show|uninstall|apply|diff|status|file|package|service)
                 action_idx=$i
                 action="${COMP_WORDS[i]}"
                 break
@@ -382,6 +432,10 @@ _dotted() {
             ),
             (
                 "::artifact -- Artifact ID (repo/artifact) to adopt package into:",
+                "::artifact:__dotted_artifacts",
+            ),
+            (
+                "::artifact -- Artifact ID (repo/artifact) to adopt service into:",
                 "::artifact:__dotted_artifacts",
             ),
         ];

@@ -57,7 +57,7 @@ impl Fixture {
 }
 
 fn write_fake_tools(bin: &Path) {
-    for tool in ["pacman", "dnf", "apt-get", "flatpak"] {
+    for tool in ["pacman", "dnf", "apt-get", "flatpak", "systemctl"] {
         write_executable(bin.join(tool), "#!/usr/bin/env sh\nexit 0\n");
     }
     write_executable(bin.join("sudo"), "#!/usr/bin/env sh\nexec \"$@\"\n");
@@ -106,6 +106,13 @@ fn deploy_status_displays_example_settings_and_artifacts() {
         .stdout(predicate::str::contains("repo2/neovim"))
         .stdout(predicate::str::contains("repo2/sysconfig"))
         .stdout(predicate::str::contains("/etc/config.conf"));
+
+    fixture
+        .cmd()
+        .args(["deploy", "status", "--filter", "services"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("services:"));
 }
 
 #[test]
@@ -159,6 +166,7 @@ fn shell_completions_includes_state_and_path_candidates() {
     let bash = String::from_utf8_lossy(&bash.stdout);
     assert!(bash.contains("--state disabled"));
     assert!(bash.contains("_filedir"));
+    assert!(bash.contains("ignore"));
 
     let fish = Command::cargo_bin("dotted")
         .expect("binary")
@@ -167,6 +175,8 @@ fn shell_completions_includes_state_and_path_candidates() {
         .expect("fish completion");
     let fish = String::from_utf8_lossy(&fish.stdout);
     assert!(fish.contains("__fish_complete_path"));
+    assert!(fish.contains("file package service"));
+    assert!(fish.contains("add remove list scan"));
 }
 
 #[test]
@@ -256,10 +266,15 @@ fn workspace_doctor_validates_healthy_fixture() {
 #[test]
 fn shell_env_outputs_export_vars_and_logs_overrides() {
     let fixture = Fixture::new();
+    let user_settings = fixture.meta.join("[settings]/[device]/[user].toml");
+    let mut content = fs::read_to_string(&user_settings).expect("user settings");
+    content.push_str("\n[env]\n\"EDITOR\" = \"nvim\"\n");
+    fs::write(&user_settings, content).expect("write user settings");
+
     let bin = fixture.meta.join("[artifacts]/git/[bin].toml");
-    let mut content = fs::read_to_string(&bin).expect("bin toml");
-    content.push_str("\"EDITOR\" = \"vim\"\n");
-    fs::write(bin, content).expect("write override");
+    let mut bin_content = fs::read_to_string(&bin).expect("bin toml");
+    bin_content.push_str("\"EDITOR\" = \"vim\"\n");
+    fs::write(bin, bin_content).expect("write bin");
 
     fixture
         .cmd()
@@ -333,26 +348,139 @@ fn adopt_file_and_package_updates_artifact_manifest() {
 }
 
 #[test]
-fn files_list_and_ignore_add_remove() {
+fn adopt_service_updates_artifact_manifest() {
     let fixture = Fixture::new();
-    let test_file = fixture.home.join("test_file.txt");
-    fs::write(&test_file, "content").unwrap();
 
     fixture
         .cmd()
-        .args(["files", "list", "--path", fixture.home.to_str().unwrap()])
+        .args(["adopt", "service", "/git", "user", "syncthing.service"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Added (user) service syncthing.service",
+        ));
+
+    fixture
+        .cmd()
+        .args(["adopt", "service", "/git", "redshift"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Added (user) service redshift.service",
+        ));
+
+    let bin_toml = fs::read_to_string(fixture.meta.join("[artifacts]/git/[bin].toml")).unwrap();
+    assert!(bin_toml.contains("[services.user]"));
+    assert!(bin_toml.contains("syncthing.service"));
+    assert!(bin_toml.contains("redshift.service"));
+}
+
+#[test]
+fn ignore_file_list_and_add_remove() {
+    let fixture = Fixture::new();
+    let test_file1 = fixture.home.join("test_file1.txt");
+    let test_file2 = fixture.home.join("test_file2.txt");
+    fs::write(&test_file1, "content1").unwrap();
+    fs::write(&test_file2, "content2").unwrap();
+
+    fixture
+        .cmd()
+        .args([
+            "ignore",
+            "file",
+            "list",
+            "--path",
+            fixture.home.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Test multi-argument add
+    fixture
+        .cmd()
+        .args([
+            "ignore",
+            "file",
+            "add",
+            test_file1.to_str().unwrap(),
+            test_file2.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Test multi-argument remove
+    fixture
+        .cmd()
+        .args([
+            "ignore",
+            "file",
+            "remove",
+            test_file1.to_str().unwrap(),
+            test_file2.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn ignore_package_add_remove_list() {
+    let fixture = Fixture::new();
+
+    fixture
+        .cmd()
+        .args(["ignore", "package", "add", "vim", "neovim", "tmux"])
         .assert()
         .success();
 
     fixture
         .cmd()
-        .args(["files", "ignore", "add", test_file.to_str().unwrap()])
+        .args(["ignore", "package", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("vim"))
+        .stdout(predicate::str::contains("neovim"))
+        .stdout(predicate::str::contains("tmux"));
+
+    fixture
+        .cmd()
+        .args(["ignore", "package", "remove", "vim", "neovim"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn ignore_service_add_remove_list() {
+    let fixture = Fixture::new();
+
+    fixture
+        .cmd()
+        .args([
+            "ignore",
+            "service",
+            "add",
+            "syncthing.service",
+            "bluetooth.service",
+        ])
         .assert()
         .success();
 
     fixture
         .cmd()
-        .args(["files", "ignore", "remove", test_file.to_str().unwrap()])
+        .args(["ignore", "service", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("syncthing.service"))
+        .stdout(predicate::str::contains("bluetooth.service"));
+
+    fixture
+        .cmd()
+        .args([
+            "ignore",
+            "service",
+            "remove",
+            "syncthing.service",
+            "bluetooth.service",
+        ])
         .assert()
         .success();
 }
@@ -445,21 +573,112 @@ fn deploy_diff_outputs_unified_line_differences() {
 }
 
 #[test]
+fn workspace_format_reformats_toml_files() {
+    let fixture = Fixture::new();
+
+    let control_toml = fixture.meta.join("[artifacts]/git/[bin].toml");
+    fs::write(&control_toml, "b = \"2\"\na = \"1\"\n").unwrap();
+
+    let user_dotfile = fixture
+        .meta
+        .join("[artifacts]/git/home/.config/starship.toml");
+    let original_dotfile = "b = \"2\"\na = \"1\"\n";
+    fs::create_dir_all(user_dotfile.parent().unwrap()).unwrap();
+    fs::write(&user_dotfile, original_dotfile).unwrap();
+
+    fixture
+        .cmd()
+        .args(["workspace", "format"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Formatted artifacts/git/[bin].toml",
+        ));
+
+    let dotfile_content = fs::read_to_string(&user_dotfile).unwrap();
+    assert_eq!(dotfile_content, original_dotfile);
+
+    fixture
+        .cmd()
+        .args(["workspace", "format"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "All dotted configuration TOML files are properly formatted.",
+        ));
+}
+
+#[test]
 fn deploy_orphans_audits_unclaimed_packages() {
     let fixture = Fixture::new();
 
     fixture.cmd().args(["deploy", "orphans"]).assert().success();
+
+    fixture
+        .cmd()
+        .args(["deploy", "orphans", "--filter", "services"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Services"));
 }
 
 #[test]
-fn files_scan_recursively_lists_paths() {
+fn deploy_orphans_filters_ignored_packages_and_services() {
     let fixture = Fixture::new();
 
     fixture
         .cmd()
-        .args(["files", "scan", "--path", fixture.home.to_str().unwrap()])
+        .args(["ignore", "package", "add", "custom-pkg"])
         .assert()
         .success();
+
+    fixture
+        .cmd()
+        .args(["ignore", "service", "add", "custom-service.service"])
+        .assert()
+        .success();
+
+    fixture
+        .cmd()
+        .args(["deploy", "orphans"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("custom-pkg").not())
+        .stdout(predicate::str::contains("custom-service.service").not());
+}
+
+#[test]
+fn ignore_file_scan_recursively_lists_paths() {
+    let fixture = Fixture::new();
+
+    // Create an ignored directory with a tracked file inside
+    let config_dir = fixture.home.join(".config");
+    let git_dir = config_dir.join("git");
+    fs::create_dir_all(&git_dir).unwrap();
+    let git_config = git_dir.join("config");
+    fs::write(&git_config, "[user]\nname = Test\n").unwrap();
+
+    let rel_git_dir = git_dir.strip_prefix(&fixture.home).unwrap();
+    fixture
+        .cmd()
+        .current_dir(&fixture.home)
+        .args(["ignore", "file", "add", rel_git_dir.to_str().unwrap()])
+        .assert()
+        .success();
+
+    fixture
+        .cmd()
+        .args([
+            "ignore",
+            "file",
+            "scan",
+            "--path",
+            fixture.home.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[masked]"))
+        .stdout(predicate::str::contains("~/.config/git/"));
 }
 
 #[test]

@@ -2,7 +2,7 @@ pub mod adopt;
 pub mod artifact;
 pub mod backup;
 pub mod deploy;
-pub mod files;
+pub mod ignore;
 pub mod lib;
 pub mod repo;
 pub mod shell;

@@ -37,7 +37,7 @@ pub fn run(runtime: &Runtime, artifact_ids: &[String]) -> Result<()> {
     let mut disable: BTreeSet<String> = file.artifacts.disable.into_iter().collect();
 
     for artifact_id in artifact_ids {
-        enable.insert(artifact_id.to_string());
+        enable.insert(artifact_id.clone());
         disable.remove(artifact_id);
     }
 

@@ -11,6 +11,8 @@ pub(crate) struct BinFile {
     #[serde(default)]
     pub(crate) flatpak: PackageSet,
     #[serde(default)]
+    pub(crate) services: BTreeMap<String, ServiceSet>,
+    #[serde(default)]
     pub(crate) env: BTreeMap<String, String>,
     #[serde(default)]
     pub(crate) ignore: IgnoreSection,
@@ -18,6 +20,12 @@ pub(crate) struct BinFile {
     pub(crate) config: BinConfig,
     #[serde(flatten)]
     pub(crate) extra: BTreeMap<String, toml::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub(crate) struct ServiceSet {
+    #[serde(default)]
+    pub(crate) units: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

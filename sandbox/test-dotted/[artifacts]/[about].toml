@@ -5,3 +5,5 @@ description = "Git configuration"
 [about.micro]
 r = 1
 description = "Micro editor settings"
+
+[maintainer]

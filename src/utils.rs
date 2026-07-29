@@ -265,6 +265,30 @@ pub(crate) fn is_flatpak_installed(package: &str) -> bool {
         .is_ok_and(|out| out.status.success())
 }
 
+pub(crate) fn is_service_enabled(scope: &str, unit: &str) -> bool {
+    let mut cmd = Command::new("systemctl");
+    if scope == "user" {
+        cmd.arg("--user");
+    }
+    cmd.args(["is-enabled", unit]);
+    cmd.output().is_ok_and(|out| {
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        stdout.trim() == "enabled"
+    })
+}
+
+pub(crate) fn is_service_active(scope: &str, unit: &str) -> bool {
+    let mut cmd = Command::new("systemctl");
+    if scope == "user" {
+        cmd.arg("--user");
+    }
+    cmd.args(["is-active", unit]);
+    cmd.output().is_ok_and(|out| {
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        stdout.trim() == "active"
+    })
+}
+
 pub(crate) fn print_banner(title: &str, runtime: &Runtime) {
     let _ = (title, runtime);
 }

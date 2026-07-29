@@ -31,9 +31,12 @@ pub(crate) struct Plan {
     pub(crate) env_overrides: Vec<String>,
     pub(crate) packages: BTreeMap<String, BTreeSet<String>>,
     pub(crate) flatpaks: BTreeSet<String>,
+    pub(crate) services: BTreeMap<String, BTreeSet<String>>,
     pub(crate) downloads: Vec<PlannedDownload>,
     pub(crate) ignored_folders: BTreeSet<PathBuf>,
     pub(crate) ignored_files: BTreeSet<PathBuf>,
+    pub(crate) ignored_packages: BTreeSet<String>,
+    pub(crate) ignored_services: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug)]

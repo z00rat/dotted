@@ -31,7 +31,7 @@ pub fn run(runtime: &Runtime, artifact_ids: &[String]) -> Result<()> {
 
     for artifact_id in artifact_ids {
         enable.remove(artifact_id);
-        disable.insert(artifact_id.to_string());
+        disable.insert(artifact_id.clone());
     }
 
     file.artifacts.enable = enable.into_iter().collect();

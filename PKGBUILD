@@ -2,7 +2,7 @@
 pkgname=dotted
 pkgver=1.0.0
 pkgrel=1
-pkgdesc="A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages."
+pkgdesc="A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages & services."
 arch=('x86_64')
 url="https://github.com/z00rat/dotted"
 license=('AGPL-3.0-only')

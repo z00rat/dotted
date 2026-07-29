@@ -1,9 +1,9 @@
 [package]
 name = "dotted"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2024"
 license = "AGPL-3.0-only"
-description = "A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages."
+description = "A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages & services."
 
 [dependencies]
 color-eyre = "0.6"
@@ -67,7 +67,7 @@ dist-contents = ["LICENSE"]
 [package.metadata.deb]
 maintainer = "hello@zurat.dev"
 copyright = "2026, dotted developers"
-extended-description = "A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages."
+extended-description = "A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages & services."
 assets = [
     [
         "target/release/dotted",

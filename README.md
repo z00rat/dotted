@@ -1,6 +1,6 @@
 # Dotted
 
-A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages.
+A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages & services.
 
 ---
 
@@ -94,6 +94,12 @@ packages = ["neovim-qt"]
 [flatpak]
 packages = ["com.visualstudio.code"]
 
+[services.user]
+units = ["syncthing.service"]
+
+[services.system]
+units = ["docker.service"]
+
 [download.x86_64]
 url = "https://github.com/fastfetch-cli/fastfetch/releases/download/2.30.0/fastfetch-linux-amd64.tar.gz"
 zip = "fastfetch-linux-amd64.tar.gz"
@@ -155,6 +161,10 @@ Manage the dotted repo environment and pull/push changes across machines.
   ```bash
   dotted workspace doctor [config|repo|artifact|tool]
   ```
+- **Format all workspace TOML files**:
+  ```bash
+  dotted workspace format
+  ```
 
 ### 2. Artifact Commands
 
@@ -196,6 +206,10 @@ Incorporate existing system files and packages into your workspace.
 - **Adopt a system package**:
   ```bash
   dotted adopt package <artifact_id> [package_name] [--type archlinux|fedora|ubuntu|flatpak]
+  ```
+- **Adopt a systemd service unit**:
+  ```bash
+  dotted adopt service <artifact_id> [user|system] <service_names...>
   ```
 
 ### 4. Deploy Commands
@@ -240,23 +254,29 @@ Manage external artifact repositories configured in `[dotted].toml`.
   dotted repo about <name>
   ```
 
-### 6. File Inventory Commands
+### 6. Ignore Commands
 
-- **List target folder contents and their tracking status**:
+Manage globally ignored files, directories, system packages, and systemd services.
+
+- **Ignore files & directories**:
   ```bash
-  dotted files list [--path <path>] [--depth <depth>] [--filter tracked|untracked|ignored|mixed]
+  dotted ignore file add [paths...]
+  dotted ignore file remove [paths...]
+  dotted ignore file list [--path <path>] [--depth <depth>] [--filter tracked|untracked|ignored|partial|masked]
+  dotted ignore file scan [--path <path>] [--filter tracked|untracked|ignored|partial|masked]
   ```
-  _(Status categories: `[tracked]`, `[untracked]`, `[ignored]`, or `[mixed]`)_
-- **Scan target folder recursively**:
+- **Ignore system packages**:
   ```bash
-  dotted files scan [--path <path>] [--filter tracked|untracked|ignored|mixed]
+  dotted ignore package add [package_names...]
+  dotted ignore package remove [package_names...]
+  dotted ignore package list
   ```
-- **Add/remove patterns to/from ignore lists**:
+- **Ignore systemd services**:
   ```bash
-  dotted files ignore add [path]
-  dotted files ignore remove [path]
+  dotted ignore service add [service_units...]
+  dotted ignore service remove [service_units...]
+  dotted ignore service list
   ```
-  _If `path` is omitted, starts an interactive file browser to select a path._
 
 ### 7. Backup & Restore Commands
 

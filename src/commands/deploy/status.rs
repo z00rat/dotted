@@ -115,6 +115,26 @@ fn print_artifacts_section(
             }
         }
 
+        if show("services") && !art.bin.services.is_empty() {
+            println!("    services:");
+            for (scope, service_set) in &art.bin.services {
+                if !service_set.units.is_empty() {
+                    println!("      {scope}:");
+                    for unit in &service_set.units {
+                        let enabled = crate::utils::is_service_enabled(scope, unit);
+                        let active = crate::utils::is_service_active(scope, unit);
+                        let status_str = match (enabled, active) {
+                            (true, true) => style("[active & enabled]", "34", runtime),
+                            (true, false) => style("[inactive & enabled]", "33", runtime),
+                            (false, true) => style("[active & disabled]", "33", runtime),
+                            (false, false) => style("[disabled]", "32", runtime),
+                        };
+                        println!("        {status_str} {unit}");
+                    }
+                }
+            }
+        }
+
         if show("downloads") && plan.downloads.iter().any(|d| d.artifact_id == art.id) {
             println!("    downloads:");
             for download in plan.downloads.iter().filter(|d| d.artifact_id == art.id) {

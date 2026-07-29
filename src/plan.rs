@@ -179,6 +179,7 @@ fn collect_env(
 type PackagesAndDownloads = (
     BTreeMap<String, BTreeSet<String>>,
     BTreeSet<String>,
+    BTreeMap<String, BTreeSet<String>>,
     Vec<crate::types::PlannedDownload>,
 );
 
@@ -189,6 +190,7 @@ fn build_packages_and_downloads(
     let distro = runtime.distro.clone();
     let mut packages: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut flatpaks = BTreeSet::new();
+    let mut services: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut downloads = Vec::new();
     let arch = normalize_arch(std::env::consts::ARCH);
     for artifact in artifacts {
@@ -199,18 +201,29 @@ fn build_packages_and_downloads(
                 .extend(set.packages.iter().cloned());
         }
         flatpaks.extend(artifact.bin.flatpak.packages.iter().cloned());
+        for (scope, service_set) in &artifact.bin.services {
+            services
+                .entry(scope.clone())
+                .or_default()
+                .extend(service_set.units.iter().cloned());
+        }
         if let Some(download) = artifact.bin.download.get(&arch) {
             downloads.push(plan_download(runtime, &artifact.id, &arch, download)?);
         }
     }
-    Ok((packages, flatpaks, downloads))
+    Ok((packages, flatpaks, services, downloads))
 }
 
-fn collect_ignored_paths(
+fn collect_ignored_rules(
     runtime: &Runtime,
     artifacts: &[Artifact],
     settings: &Settings,
-) -> (BTreeSet<PathBuf>, BTreeSet<PathBuf>) {
+) -> (
+    BTreeSet<PathBuf>,
+    BTreeSet<PathBuf>,
+    BTreeSet<String>,
+    BTreeSet<String>,
+) {
     let mut ignored_folders: BTreeSet<PathBuf> = settings
         .ignore_folders
         .iter()
@@ -221,6 +234,9 @@ fn collect_ignored_paths(
         .iter()
         .map(|path| runtime.resolve_tilde(path))
         .collect();
+    let mut ignored_packages: BTreeSet<String> = settings.ignore_packages.clone();
+    let mut ignored_services: BTreeSet<String> = settings.ignore_services.clone();
+
     for artifact in artifacts {
         ignored_folders.extend(
             artifact
@@ -238,8 +254,15 @@ fn collect_ignored_paths(
                 .iter()
                 .map(|path| runtime.resolve_tilde(path)),
         );
+        ignored_packages.extend(artifact.bin.ignore.package.iter().cloned());
+        ignored_services.extend(artifact.bin.ignore.service.iter().cloned());
     }
-    (ignored_folders, ignored_files)
+    (
+        ignored_folders,
+        ignored_files,
+        ignored_packages,
+        ignored_services,
+    )
 }
 
 pub(crate) fn build_plan(runtime: &Runtime, only: Option<&str>) -> Result<Plan> {
@@ -247,8 +270,10 @@ pub(crate) fn build_plan(runtime: &Runtime, only: Option<&str>) -> Result<Plan> 
     let artifacts = collect_enabled_artifacts(runtime, only)?;
     let files = build_planned_files(runtime, &artifacts, &settings)?;
     let (env, env_overrides) = collect_env(&artifacts, &settings);
-    let (packages, flatpaks, downloads) = build_packages_and_downloads(runtime, &artifacts)?;
-    let (ignored_folders, ignored_files) = collect_ignored_paths(runtime, &artifacts, &settings);
+    let (packages, flatpaks, services, downloads) =
+        build_packages_and_downloads(runtime, &artifacts)?;
+    let (ignored_folders, ignored_files, ignored_packages, ignored_services) =
+        collect_ignored_rules(runtime, &artifacts, &settings);
 
     Ok(Plan {
         artifacts,
@@ -257,9 +282,12 @@ pub(crate) fn build_plan(runtime: &Runtime, only: Option<&str>) -> Result<Plan> 
         env_overrides,
         packages,
         flatpaks,
+        services,
         downloads,
         ignored_folders,
         ignored_files,
+        ignored_packages,
+        ignored_services,
     })
 }
 

@@ -40,7 +40,11 @@ fn print_native_packages_inventory(
         println!("  Installed/Declared: {pkgs_list}");
         match installed_native_packages(distro) {
             Ok(installed) => {
-                let extra: Vec<_> = installed.difference(packages).cloned().collect();
+                let extra: Vec<_> = installed
+                    .difference(packages)
+                    .filter(|pkg| !plan.ignored_packages.contains(*pkg))
+                    .cloned()
+                    .collect();
                 if extra.is_empty() {
                     println!("  Unclaimed: {}", style("none", "32", runtime));
                 } else {
@@ -68,7 +72,11 @@ fn print_flatpak_inventory(runtime: &Runtime, plan: &crate::types::Plan, filter:
         println!("  Declared Flatpaks: {flatpaks_list}");
         match installed_flatpaks() {
             Ok(installed) => {
-                let extra: Vec<_> = installed.difference(&plan.flatpaks).cloned().collect();
+                let extra: Vec<_> = installed
+                    .difference(&plan.flatpaks)
+                    .filter(|pkg| !plan.ignored_packages.contains(*pkg))
+                    .cloned()
+                    .collect();
                 if extra.is_empty() {
                     println!("  Unclaimed Flatpaks: {}", style("none", "32", runtime));
                 } else {
@@ -154,6 +162,70 @@ fn print_downloads_inventory(
     Ok(())
 }
 
+fn print_services_inventory(runtime: &Runtime, plan: &crate::types::Plan, filter: Option<&str>) {
+    if filter.is_some_and(|f| f != "services") {
+        return;
+    }
+    println!();
+    println!("{}", style("Services", "36;1", runtime));
+
+    for scope in ["user", "system"] {
+        println!("  {scope}:");
+        let declared_units = plan.services.get(scope).cloned().unwrap_or_default();
+        let declared_str = if declared_units.is_empty() {
+            "none".to_string()
+        } else {
+            declared_units.iter().cloned().collect::<Vec<_>>().join(" ")
+        };
+        println!("    Declared Services: {declared_str}");
+
+        let cmd_args: &[&str] = if scope == "user" {
+            &[
+                "systemctl",
+                "--user",
+                "list-unit-files",
+                "--state=enabled",
+                "--plain",
+            ]
+        } else {
+            &["systemctl", "list-unit-files", "--state=enabled", "--plain"]
+        };
+        match crate::utils::command_lines(cmd_args) {
+            Ok(lines) => {
+                let enabled_units: BTreeSet<String> = lines
+                    .into_iter()
+                    .filter_map(|line| {
+                        let mut parts = line.split_whitespace();
+                        let unit = parts.next()?;
+                        let state = parts.next()?;
+                        if state == "enabled" {
+                            Some(unit.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let extra: Vec<_> = enabled_units.difference(&declared_units).cloned().collect();
+                if extra.is_empty() {
+                    println!(
+                        "    Unclaimed Enabled Services: {}",
+                        style("none", "32", runtime)
+                    );
+                } else {
+                    println!(
+                        "    Unclaimed Enabled Services: {}",
+                        style(&extra.join(" "), "33", runtime)
+                    );
+                }
+            }
+            Err(error) => println!(
+                "    Unclaimed Enabled Services: {}",
+                style(&format!("unavailable ({error})"), "31", runtime)
+            ),
+        }
+    }
+}
+
 pub fn run(runtime: &Runtime, filter: Option<&str>) -> Result<()> {
     crate::utils::print_banner("ORPHANS INVENTORY REPORT", runtime);
     let plan = build_plan(runtime, None)?;
@@ -163,6 +235,8 @@ pub fn run(runtime: &Runtime, filter: Option<&str>) -> Result<()> {
 
     println!();
     print_downloads_inventory(runtime, &plan, filter)?;
+
+    print_services_inventory(runtime, &plan, filter);
 
     println!();
     println!(

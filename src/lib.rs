@@ -8,8 +8,9 @@ pub(crate) mod types;
 pub(crate) mod utils;
 
 use cli::{
-    AdoptCommands, ArtifactCommands, BackupCommands, Cli, Commands, DeployCommands, FilesCommands,
-    IgnoreCommands, RepoCommands, ShellCommands, WorkspaceCommands,
+    AdoptCommands, ArtifactCommands, BackupCommands, Cli, Commands, DeployCommands, IgnoreCommands,
+    IgnoreFileCommands, IgnorePackageCommands, IgnoreServiceCommands, RepoCommands, ShellCommands,
+    WorkspaceCommands,
 };
 
 pub fn run() -> Result<()> {
@@ -42,6 +43,7 @@ fn run_with_cli(cli: Cli) -> Result<()> {
             WorkspaceCommands::Doctor { category } => {
                 commands::workspace::doctor::run(&runtime, category.as_deref())
             }
+            WorkspaceCommands::Format => commands::workspace::format::run(&runtime),
         },
         Commands::Artifact(sub) => match sub {
             ArtifactCommands::List { filter, raw, state } => {
@@ -72,6 +74,11 @@ fn run_with_cli(cli: Cli) -> Result<()> {
                 package,
                 package_type,
             } => commands::adopt::package::run(&runtime, &artifact, package, package_type),
+            AdoptCommands::Service {
+                artifact,
+                scope_or_service,
+                services,
+            } => commands::adopt::service::run(&runtime, &artifact, scope_or_service, services),
         },
         Commands::Deploy(sub) => match sub {
             DeployCommands::Status { artifact, filter } => {
@@ -93,18 +100,38 @@ fn run_with_cli(cli: Cli) -> Result<()> {
             RepoCommands::Remove { name } => commands::repo::remove::run(&runtime, &name),
             RepoCommands::About { name } => commands::repo::about::run(&runtime, &name),
         },
-        Commands::Files(sub) => match sub {
-            FilesCommands::List(args) => commands::files::list::run(&runtime, &args),
-            FilesCommands::Scan { path, filter } => {
-                commands::files::scan::run(&runtime, path, filter)
-            }
-            FilesCommands::Ignore(ignore_sub) => match ignore_sub {
-                IgnoreCommands::Add { path } => {
-                    commands::files::ignore::add(&runtime, path.as_deref())
+        Commands::Ignore(sub) => match sub {
+            IgnoreCommands::File(file_sub) => match file_sub {
+                IgnoreFileCommands::Add { paths } => {
+                    commands::ignore::file::add::run(&runtime, &paths)
                 }
-                IgnoreCommands::Remove { path } => {
-                    commands::files::ignore::remove(&runtime, path.as_deref())
+                IgnoreFileCommands::Remove { paths } => {
+                    commands::ignore::file::remove::run(&runtime, &paths)
                 }
+                IgnoreFileCommands::List(args) => {
+                    commands::ignore::file::list::run(&runtime, &args)
+                }
+                IgnoreFileCommands::Scan { path, filter } => {
+                    commands::ignore::file::scan::run(&runtime, path, filter)
+                }
+            },
+            IgnoreCommands::Package(pkg_sub) => match pkg_sub {
+                IgnorePackageCommands::Add { names } => {
+                    commands::ignore::package::add::run(&runtime, &names)
+                }
+                IgnorePackageCommands::Remove { names } => {
+                    commands::ignore::package::remove::run(&runtime, &names)
+                }
+                IgnorePackageCommands::List => commands::ignore::package::list::run(&runtime),
+            },
+            IgnoreCommands::Service(svc_sub) => match svc_sub {
+                IgnoreServiceCommands::Add { names } => {
+                    commands::ignore::service::add::run(&runtime, &names)
+                }
+                IgnoreServiceCommands::Remove { names } => {
+                    commands::ignore::service::remove::run(&runtime, &names)
+                }
+                IgnoreServiceCommands::List => commands::ignore::service::list::run(&runtime),
             },
         },
         Commands::Backup(sub) => match sub {

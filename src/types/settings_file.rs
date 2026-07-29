@@ -27,6 +27,10 @@ pub(crate) struct IgnoreSection {
     pub(crate) folder: Vec<String>,
     #[serde(default)]
     pub(crate) file: Vec<String>,
+    #[serde(default)]
+    pub(crate) package: Vec<String>,
+    #[serde(default)]
+    pub(crate) service: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -35,6 +39,8 @@ pub(crate) struct Settings {
     pub(crate) disable: BTreeSet<String>,
     pub(crate) ignore_folders: BTreeSet<String>,
     pub(crate) ignore_files: BTreeSet<String>,
+    pub(crate) ignore_packages: BTreeSet<String>,
+    pub(crate) ignore_services: BTreeSet<String>,
     pub(crate) replace: BTreeMap<String, String>,
     pub(crate) env: BTreeMap<String, String>,
 }
@@ -46,6 +52,8 @@ impl Settings {
             disable: BTreeSet::new(),
             ignore_folders: BTreeSet::new(),
             ignore_files: BTreeSet::new(),
+            ignore_packages: BTreeSet::new(),
+            ignore_services: BTreeSet::new(),
             replace: BTreeMap::new(),
             env: BTreeMap::new(),
         }
@@ -56,6 +64,8 @@ impl Settings {
         self.disable.extend(file.artifacts.disable);
         self.ignore_folders.extend(file.ignore.folder);
         self.ignore_files.extend(file.ignore.file);
+        self.ignore_packages.extend(file.ignore.package);
+        self.ignore_services.extend(file.ignore.service);
         self.replace.extend(file.replace);
         self.env.extend(file.env);
     }

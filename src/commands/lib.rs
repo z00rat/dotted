@@ -125,9 +125,14 @@ pub(crate) fn print_plan_extras(runtime: &Runtime, plan: &Plan, filter: Option<&
     }
     if (show("packages") && !plan.packages.is_empty())
         || (show("downloads") && (!plan.flatpaks.is_empty() || !plan.downloads.is_empty()))
+        || (show("services") && !plan.services.is_empty())
     {
         println!();
-        println!("packages/downloads:");
+        if show("services") && !show("packages") && !show("downloads") {
+            println!("services:");
+        } else {
+            println!("packages/downloads/services:");
+        }
         if show("packages") {
             for (distro, packages) in &plan.packages {
                 for pkg in packages {
@@ -171,6 +176,21 @@ pub(crate) fn print_plan_extras(runtime: &Runtime, plan: &Plan, filter: Option<&
                     url,
                     download.display_path.display()
                 );
+            }
+        }
+        if show("services") {
+            for (scope, service_set) in &plan.services {
+                for unit in service_set {
+                    let enabled = crate::utils::is_service_enabled(scope, unit);
+                    let active = crate::utils::is_service_active(scope, unit);
+                    let status_str = match (enabled, active) {
+                        (true, true) => style("[active & enabled]", "34", runtime),
+                        (true, false) => style("[inactive & enabled]", "33", runtime),
+                        (false, true) => style("[active & disabled]", "33", runtime),
+                        (false, false) => style("[disabled]", "32", runtime),
+                    };
+                    println!("  {status_str} service ({scope}) {unit}");
+                }
             }
         }
     }
@@ -335,11 +355,9 @@ pub(crate) fn apply_packages_and_downloads(
             continue;
         }
         let command = native_package_command(distro, &missing, package_commands)?;
-        command_lines_to_show.push(crate::utils::shell_join(&command));
-        println!(
-            "native packages ({distro}): {}",
-            crate::utils::shell_join(&command)
-        );
+        let joined = crate::utils::shell_join(&command);
+        println!("native packages ({distro}): {joined}");
+        command_lines_to_show.push(joined);
     }
     let missing_flatpaks: BTreeSet<String> = plan
         .flatpaks
@@ -354,8 +372,9 @@ pub(crate) fn apply_packages_and_downloads(
             "-y".to_string(),
         ];
         command.extend(missing_flatpaks);
-        command_lines_to_show.push(crate::utils::shell_join(&command));
-        println!("flatpaks: {}", crate::utils::shell_join(&command));
+        let joined = crate::utils::shell_join(&command);
+        println!("flatpaks: {joined}");
+        command_lines_to_show.push(joined);
     }
     for download in &plan.downloads {
         if download.install_path.exists() {
@@ -378,8 +397,26 @@ pub(crate) fn apply_packages_and_downloads(
                 )
             }
         };
-        command_lines_to_show.push(dl_cmd.clone());
         println!("download: {dl_cmd}");
+        command_lines_to_show.push(dl_cmd);
+    }
+    for (scope, service_set) in &plan.services {
+        let mut to_enable = Vec::new();
+        for unit in service_set {
+            if !crate::utils::is_service_enabled(scope, unit) {
+                to_enable.push(unit.clone());
+            }
+        }
+        if !to_enable.is_empty() {
+            let cmd_prefix = if scope == "user" {
+                "systemctl --user enable --now"
+            } else {
+                "sudo systemctl enable --now"
+            };
+            let svc_cmd = format!("{} {}", cmd_prefix, to_enable.join(" "));
+            println!("services ({scope}): {svc_cmd}");
+            command_lines_to_show.push(svc_cmd);
+        }
     }
 
     if !command_lines_to_show.is_empty() {
@@ -387,7 +424,7 @@ pub(crate) fn apply_packages_and_downloads(
         println!(
             "{}",
             style(
-                "COMMANDS PLANNED/EXECUTED FOR PACKAGES/DOWNLOADS:",
+                "COMMANDS PLANNED/EXECUTED FOR PACKAGES/DOWNLOADS/SERVICES:",
                 "36;1",
                 runtime
             )
@@ -490,6 +527,7 @@ pub(crate) type Claims = (
     BTreeMap<String, BTreeSet<String>>,
     BTreeSet<String>,
     BTreeSet<PathBuf>,
+    BTreeMap<String, BTreeSet<String>>,
 );
 
 pub(crate) fn collect_claims(runtime: &Runtime, artifacts: &[Artifact]) -> Result<Claims> {
@@ -498,6 +536,7 @@ pub(crate) fn collect_claims(runtime: &Runtime, artifacts: &[Artifact]) -> Resul
     let mut packages: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut flatpaks = BTreeSet::new();
     let mut downloads = BTreeSet::new();
+    let mut services: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for artifact in artifacts {
         if let Some(set) = artifact.bin.distro.get(&distro) {
             packages
@@ -506,11 +545,17 @@ pub(crate) fn collect_claims(runtime: &Runtime, artifacts: &[Artifact]) -> Resul
                 .extend(set.packages.iter().cloned());
         }
         flatpaks.extend(artifact.bin.flatpak.packages.iter().cloned());
+        for (scope, service_set) in &artifact.bin.services {
+            services
+                .entry(scope.clone())
+                .or_default()
+                .extend(service_set.units.iter().cloned());
+        }
         if let Some(download) = artifact.bin.download.get(&arch) {
             downloads.insert(plan_download(runtime, &artifact.id, &arch, download)?.display_path);
         }
     }
-    Ok((packages, flatpaks, downloads))
+    Ok((packages, flatpaks, downloads, services))
 }
 
 pub(crate) fn print_unclaimed_hints(runtime: &Runtime, target: &Claims, other: &Claims) {
@@ -539,6 +584,28 @@ pub(crate) fn print_unclaimed_hints(runtime: &Runtime, target: &Claims, other: &
             println!(
                 "unclaimed download: {}",
                 runtime.display_path(path).display()
+            );
+        }
+    }
+    for (scope, units) in &target.3 {
+        let other_units = other.3.get(scope).cloned().unwrap_or_default();
+        let unclaimed: Vec<_> = units.difference(&other_units).cloned().collect();
+        let active_or_enabled: Vec<_> = unclaimed
+            .into_iter()
+            .filter(|unit| {
+                crate::utils::is_service_enabled(scope, unit)
+                    || crate::utils::is_service_active(scope, unit)
+            })
+            .collect();
+        if !active_or_enabled.is_empty() {
+            let cmd_prefix = if scope == "user" {
+                "systemctl --user disable --now"
+            } else {
+                "sudo systemctl disable --now"
+            };
+            println!(
+                "unclaimed service ({scope}): {cmd_prefix} {}",
+                active_or_enabled.join(" ")
             );
         }
     }

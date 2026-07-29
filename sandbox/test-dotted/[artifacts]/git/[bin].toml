@@ -4,5 +4,12 @@ packages = ["git", "git-delta"]
 [flatpak]
 packages = ["org.videolan.VLC"]
 
+[services.user]
+units = ["ssh-agent.service"]
+
 [env]
 "GIT_EDITOR" = "micro"
+
+[ignore]
+package = ["git-lfs"]
+service = ["system:bluetooth.service"]
