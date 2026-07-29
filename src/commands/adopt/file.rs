@@ -191,8 +191,7 @@ mod tests {
             no_color: true,
         };
 
-        let repo_dir = runtime.dotted_dir.join("default");
-        let artifact_dir = repo_dir.join("myart");
+        let artifact_dir = runtime.dotted_dir.join("[artifacts]").join("myart");
         fs::create_dir_all(&artifact_dir).unwrap();
 
         let file1 = home_dir.join(".config/app/file1.txt");
@@ -201,7 +200,7 @@ mod tests {
         fs::write(&file1, "content1").unwrap();
         fs::write(&file2, "content2").unwrap();
 
-        run(&runtime, "default/myart", vec![file1, file2]).unwrap();
+        run(&runtime, "/myart", vec![file1, file2]).unwrap();
 
         assert!(artifact_dir.join("home/.config/app/file1.txt").exists());
         assert!(artifact_dir.join("home/.config/app/file2.txt").exists());

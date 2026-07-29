@@ -50,14 +50,14 @@ fn run_with_cli(cli: Cli) -> Result<()> {
             ArtifactCommands::Show { artifact } => {
                 commands::artifact::show::run(&runtime, &artifact)
             }
-            ArtifactCommands::Create { artifact_name } => {
-                commands::artifact::create::run(&runtime, &artifact_name)
+            ArtifactCommands::Create { artifact } => {
+                commands::artifact::create::run(&runtime, &artifact)
             }
-            ArtifactCommands::Enable { artifact } => {
-                commands::artifact::enable::run(&runtime, &artifact)
+            ArtifactCommands::Enable { artifacts } => {
+                commands::artifact::enable::run(&runtime, &artifacts)
             }
-            ArtifactCommands::Disable { artifact } => {
-                commands::artifact::disable::run(&runtime, &artifact)
+            ArtifactCommands::Disable { artifacts } => {
+                commands::artifact::disable::run(&runtime, &artifacts)
             }
             ArtifactCommands::Uninstall { artifact, yes } => {
                 commands::artifact::uninstall::run(&runtime, &artifact, yes)

@@ -137,6 +137,6 @@ pub fn run(runtime: &Runtime, artifact_id: &str, yes: bool) -> Result<()> {
     let other_claims = collect_claims(runtime, &other_artifacts)?;
     print_unclaimed_hints(runtime, &target_claims, &other_claims);
 
-    crate::commands::artifact::disable::run(runtime, artifact_id)?;
+    crate::commands::artifact::disable::run(runtime, &[artifact_id.to_string()])?;
     Ok(())
 }

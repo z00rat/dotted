@@ -129,6 +129,27 @@ fn artifact_list_ignores_unconfigured_top_level_repository() {
 }
 
 #[test]
+fn artifact_enable_disable_multiple() {
+    let fixture = Fixture::new();
+
+    fixture
+        .cmd()
+        .args(["artifact", "disable", "repo2/neovim", "repo2/sysconfig"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Disabled repo2/neovim"))
+        .stdout(predicate::str::contains("Disabled repo2/sysconfig"));
+
+    fixture
+        .cmd()
+        .args(["artifact", "enable", "repo2/neovim", "repo2/sysconfig"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Enabled repo2/neovim"))
+        .stdout(predicate::str::contains("Enabled repo2/sysconfig"));
+}
+
+#[test]
 fn shell_completions_includes_state_and_path_candidates() {
     let bash = Command::cargo_bin("dotted")
         .expect("binary")

@@ -87,17 +87,17 @@ pub(crate) enum ArtifactCommands {
     #[command(about = "Create a new artifact scaffold")]
     Create {
         #[arg(help = "Name of the new artifact to scaffold")]
-        artifact_name: String,
+        artifact: String,
     },
-    #[command(about = "Enable an artifact")]
+    #[command(about = "Enable one or more artifacts")]
     Enable {
-        #[arg(help = "Artifact ID (repo/artifact) to enable")]
-        artifact: String,
+        #[arg(help = "Artifact ID(s) (repo/artifact) to enable", num_args = 1..)]
+        artifacts: Vec<String>,
     },
-    #[command(about = "Disable an artifact")]
+    #[command(about = "Disable one or more artifacts")]
     Disable {
-        #[arg(help = "Artifact ID (repo/artifact) to disable")]
-        artifact: String,
+        #[arg(help = "Artifact ID(s) (repo/artifact) to disable", num_args = 1..)]
+        artifacts: Vec<String>,
     },
     #[command(about = "Uninstall and disable an artifact")]
     Uninstall {

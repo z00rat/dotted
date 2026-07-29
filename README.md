@@ -174,10 +174,10 @@ Manage the dotfile and package bundles.
   ```
 - **Enable/Disable artifacts**:
   ```bash
-  dotted artifact enable <artifact_id>
+  dotted artifact enable <artifact_ids...>
   ```
   ```bash
-  dotted artifact disable <artifact_id>
+  dotted artifact disable <artifact_ids...>
   ```
 - **Uninstall artifact files & configuration**:
   ```bash
