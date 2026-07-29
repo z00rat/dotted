@@ -1,20 +1,20 @@
-/// CLI Command: `adopt file <artifact_id> [path]`
+/// CLI Command: `adopt file <artifact_id> [paths...]`
 ///
 /// What it does:
-/// Copies a selected system file or directory into an artifact in any configured repository.
+/// Copies selected system files or directories into an artifact in any configured repository.
 ///
 /// Variations:
-/// 1. `path` provided: Directly adopts the specified file.
-/// 2. `path` not provided (interactive): Runs an interactive terminal-based file browser to let the user navigate, pick a file, or type a path.
-/// 3. `path` not provided (non-interactive): Fails with an error.
+/// 1. `paths` provided: Directly adopts all specified files/directories.
+/// 2. `paths` not provided (interactive): Runs an interactive terminal-based file browser to let the user navigate, pick a file, or type a path.
+/// 3. `paths` not provided (non-interactive): Fails with an error.
 ///
 /// Decisions & Logic Branches:
-/// - Computes the workspace-relative source path using `artifact_relative_from_system_path`.
-/// - Fails if the file already exists at the computed target path in the artifact directory.
-/// - Copies the file and records the artifact in `[about].toml`; adoption never enables it.
+/// - Computes workspace-relative source paths using `artifact_relative_from_system_path`.
+/// - Fails if any file already exists at the computed target path in the artifact directory before copying.
+/// - Copies all files and records the artifact in `[about].toml`; adoption never enables it.
 use color_eyre::eyre::{Result, bail};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::commands::lib::{
     artifact_relative_from_system_path, ensure_about_entry, repository_path, split_artifact_id,
@@ -109,31 +109,101 @@ pub(crate) fn select_path_for_ignore() -> Result<PathBuf> {
     }
 }
 
-pub fn run(runtime: &Runtime, artifact_id: &str, path: Option<PathBuf>) -> Result<()> {
+fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let dst_path = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_all(&entry.path(), &dst_path)?;
+        } else {
+            fs::copy(entry.path(), dst_path)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn run(runtime: &Runtime, artifact_id: &str, paths: Vec<PathBuf>) -> Result<()> {
     crate::utils::print_banner("ADOPTING ARTIFACT", runtime);
     let (repo, artifact) = split_artifact_id(artifact_id)?;
-    let path = if let Some(p) = path {
-        p
+    let target_paths = if !paths.is_empty() {
+        paths
     } else if !runtime.no_color {
-        select_path_for_ignore()?
+        vec![select_path_for_ignore()?]
     } else {
-        bail!("adopt requires a path when running non-interactively");
+        bail!("adopt requires at least one path when running non-interactively");
     };
 
-    let relative = artifact_relative_from_system_path(runtime, &path);
-    let destination = repository_path(runtime, repo).join(artifact).join(relative);
-    if destination.exists() {
-        bail!("artifact file already exists: {}", destination.display());
+    let repo_dir = repository_path(runtime, repo);
+    let artifact_dir = repo_dir.join(artifact);
+
+    let mut planned = Vec::new();
+    for src in &target_paths {
+        let relative = artifact_relative_from_system_path(runtime, src);
+        let destination = artifact_dir.join(&relative);
+        if destination.exists() {
+            bail!("artifact file already exists: {}", destination.display());
+        }
+        planned.push((src, destination));
     }
-    if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent)?;
+
+    for (src, destination) in &planned {
+        if src.is_dir() {
+            copy_dir_all(src, destination)?;
+        } else {
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(src, destination)?;
+        }
+        println!(
+            "Adopted {} into {}",
+            style(&src.to_string_lossy(), "32", runtime),
+            style(artifact_id, "36;1", runtime)
+        );
     }
-    fs::copy(&path, &destination)?;
+
     ensure_about_entry(runtime, repo, artifact)?;
-    println!(
-        "Adopted {} into {}",
-        style(&path.to_string_lossy(), "32", runtime),
-        style(artifact_id, "36;1", runtime)
-    );
     Ok(())
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_adopt_multiple_files() {
+        let temp = TempDir::new().unwrap();
+        let home_dir = temp.path().join("home");
+        fs::create_dir_all(&home_dir).unwrap();
+        let home_dir = home_dir.canonicalize().unwrap();
+
+        let runtime = Runtime {
+            dotted_dir: temp.path().join("dotted"),
+            home_dir: home_dir.clone(),
+            root_dir: temp.path().join("root"),
+            user: "user".to_string(),
+            device: "device".to_string(),
+            distro: "archlinux".to_string(),
+            no_color: true,
+        };
+
+        let repo_dir = runtime.dotted_dir.join("default");
+        let artifact_dir = repo_dir.join("myart");
+        fs::create_dir_all(&artifact_dir).unwrap();
+
+        let file1 = home_dir.join(".config/app/file1.txt");
+        let file2 = home_dir.join(".config/app/file2.txt");
+        fs::create_dir_all(file1.parent().unwrap()).unwrap();
+        fs::write(&file1, "content1").unwrap();
+        fs::write(&file2, "content2").unwrap();
+
+        run(&runtime, "default/myart", vec![file1, file2]).unwrap();
+
+        assert!(artifact_dir.join("home/.config/app/file1.txt").exists());
+        assert!(artifact_dir.join("home/.config/app/file2.txt").exists());
+    }
 }

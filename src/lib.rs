@@ -64,8 +64,8 @@ fn run_with_cli(cli: Cli) -> Result<()> {
             }
         },
         Commands::Adopt(sub) => match sub {
-            AdoptCommands::File { artifact, path } => {
-                commands::adopt::file::run(&runtime, &artifact, path)
+            AdoptCommands::File { artifact, paths } => {
+                commands::adopt::file::run(&runtime, &artifact, paths)
             }
             AdoptCommands::Package {
                 artifact,

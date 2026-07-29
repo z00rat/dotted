@@ -188,11 +188,11 @@ Manage the dotfile and package bundles.
 
 Incorporate existing system files and packages into your workspace.
 
-- **Adopt a system file**:
+- **Adopt system file(s) or directory**:
   ```bash
-  dotted adopt file <artifact_id> [path]
+  dotted adopt file <artifact_id> [paths...]
   ```
-  _If path is omitted, starts an interactive file browser to pick a file._
+  _If paths are omitted, starts an interactive file browser to pick a file/directory._
 - **Adopt a system package**:
   ```bash
   dotted adopt package <artifact_id> [package_name] [--type archlinux|fedora|ubuntu|flatpak]

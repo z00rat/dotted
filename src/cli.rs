@@ -110,12 +110,12 @@ pub(crate) enum ArtifactCommands {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum AdoptCommands {
-    #[command(about = "Adopt a system file into your personal repository")]
+    #[command(about = "Adopt system files or directories into your personal repository")]
     File {
         #[arg(help = "Artifact ID (repo/artifact) to adopt into")]
         artifact: String,
-        #[arg(help = "Path to the system file/directory to adopt")]
-        path: Option<PathBuf>,
+        #[arg(help = "Path(s) to the system file/directory to adopt", num_args = 1..)]
+        paths: Vec<PathBuf>,
     },
     #[command(about = "Adopt a package manager dependency")]
     Package {
