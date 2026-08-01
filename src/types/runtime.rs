@@ -19,6 +19,7 @@ pub(crate) struct Runtime {
     pub(crate) device: String,
     pub(crate) distro: String,
     pub(crate) no_color: bool,
+    pub(crate) dotted: crate::types::DottedFile,
 }
 
 const DEFAULT_DEVICE: &str = "default_device";
@@ -67,6 +68,12 @@ impl Runtime {
                 distro.as_str().to_owned()
             });
         let no_color = cli.no_color;
+        let dotted_path = dotted_dir.join(DOTTED_TOML);
+        let dotted = if dotted_path.exists() {
+            crate::types::read_toml(&dotted_path)?
+        } else {
+            crate::types::DottedFile::default()
+        };
 
         Ok(Self {
             dotted_dir,
@@ -76,6 +83,7 @@ impl Runtime {
             device,
             distro,
             no_color,
+            dotted,
         })
     }
 

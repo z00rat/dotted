@@ -107,6 +107,29 @@ pub(crate) fn style(text: &str, color_code: &str, runtime: &Runtime) -> String {
     }
 }
 
+#[allow(clippy::match_same_arms)]
+pub(crate) fn color_to_ansi(name: &str) -> &'static str {
+    match name {
+        "black" => "30",
+        "red" => "31",
+        "green" => "32",
+        "yellow" => "33",
+        "blue" => "34",
+        "magenta" => "35",
+        "cyan" => "36",
+        "white" => "37",
+        "bright-black" => "90",
+        "bright-red" => "91",
+        "bright-green" => "92",
+        "bright-yellow" => "93",
+        "bright-blue" => "94",
+        "bright-magenta" => "95",
+        "bright-cyan" => "96",
+        "bright-white" => "97",
+        _ => "37",
+    }
+}
+
 pub(crate) fn is_terminal_color(value: &str) -> bool {
     matches!(
         value,

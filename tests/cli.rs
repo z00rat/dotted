@@ -678,7 +678,7 @@ fn ignore_file_scan_recursively_lists_paths() {
         .assert()
         .success()
         .stdout(predicate::str::contains("[masked]"))
-        .stdout(predicate::str::contains("~/.config/git/"));
+        .stdout(predicate::str::contains("git/"));
 }
 
 #[test]

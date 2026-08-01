@@ -4,7 +4,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
 use crate::plan::{normalize_arch, plan_download};
 use crate::types::{
@@ -30,6 +30,11 @@ pub(crate) fn load_dotted(runtime: &Runtime) -> Result<DottedFile> {
         &dotted.color.muted,
         &dotted.color.installed,
         &dotted.color.diff,
+        &dotted.color.tracked,
+        &dotted.color.partial,
+        &dotted.color.untracked,
+        &dotted.color.ignored,
+        &dotted.color.masked,
     ] {
         if !crate::utils::is_terminal_color(color) {
             color_eyre::eyre::bail!(
@@ -250,10 +255,6 @@ pub(crate) fn matches_any_glob(path: &Path, patterns: &BTreeSet<PathBuf>) -> boo
         }
     }
     false
-}
-
-pub(crate) fn is_ignored_dir(entry: &DirEntry, ignored_dirs: &BTreeSet<PathBuf>) -> bool {
-    entry.file_type().is_dir() && ignored_dirs.contains(entry.path())
 }
 
 pub(crate) fn installed_native_packages(distro: &str) -> Result<BTreeSet<String>> {

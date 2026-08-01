@@ -105,6 +105,21 @@ url = "https://github.com/fastfetch-cli/fastfetch/releases/download/2.30.0/fastf
 zip = "fastfetch-linux-amd64.tar.gz"
 path = "fastfetch"
 install = "local" # "local" (~/.local/bin) or "system" (/usr/local/bin)
+
+# Status & Output Color Configuration in [dotted].toml
+[color]
+success = "green"
+warning = "yellow"
+error = "red"
+info = "cyan"
+muted = "bright-black"
+installed = "blue"
+diff = "yellow"
+tracked = "bright-green"
+partial = "bright-cyan"
+untracked = "bright-yellow"
+ignored = "bright-black"
+masked = "bright-magenta"
 ```
 
 ---

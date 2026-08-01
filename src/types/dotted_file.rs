@@ -1,8 +1,7 @@
 use crate::types::DEFAULT_ENV_SH;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, Default)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub(crate) struct DottedFile {
     #[serde(default)]
     pub(crate) config: ConfigSection,
@@ -49,6 +48,18 @@ pub(crate) struct ColorSection {
     pub(crate) installed: String,
     #[serde(default = "default_color")]
     pub(crate) diff: String,
+
+    // Status colors for scan / list
+    #[serde(default = "default_tracked_color")]
+    pub(crate) tracked: String,
+    #[serde(default = "default_partial_color")]
+    pub(crate) partial: String,
+    #[serde(default = "default_untracked_color")]
+    pub(crate) untracked: String,
+    #[serde(default = "default_ignored_color")]
+    pub(crate) ignored: String,
+    #[serde(default = "default_masked_color")]
+    pub(crate) masked: String,
 }
 
 impl Default for ColorSection {
@@ -61,6 +72,11 @@ impl Default for ColorSection {
             muted: "bright-black".into(),
             installed: "blue".into(),
             diff: "yellow".into(),
+            tracked: "bright-green".into(),
+            partial: "bright-cyan".into(),
+            untracked: "bright-yellow".into(),
+            ignored: "bright-black".into(),
+            masked: "bright-magenta".into(),
         }
     }
 }
@@ -82,6 +98,21 @@ pub(crate) fn default_muted_color() -> String {
 }
 pub(crate) fn default_installed_color() -> String {
     "blue".into()
+}
+pub(crate) fn default_tracked_color() -> String {
+    "bright-green".into()
+}
+pub(crate) fn default_partial_color() -> String {
+    "bright-cyan".into()
+}
+pub(crate) fn default_untracked_color() -> String {
+    "bright-yellow".into()
+}
+pub(crate) fn default_ignored_color() -> String {
+    "bright-black".into()
+}
+pub(crate) fn default_masked_color() -> String {
+    "bright-magenta".into()
 }
 
 pub(crate) fn default_config_version() -> String {

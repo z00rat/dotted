@@ -4,6 +4,7 @@ use color_eyre::Result;
 pub(crate) mod cli;
 pub(crate) mod commands;
 pub(crate) mod plan;
+pub(crate) mod status_color;
 pub(crate) mod types;
 pub(crate) mod utils;
 
@@ -179,6 +180,7 @@ mod tests {
             device: "laptop".to_string(),
             distro: "archlinux".to_string(),
             no_color: false,
+            dotted: types::DottedFile::default(),
         };
         (temp, runtime)
     }

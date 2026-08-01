@@ -189,6 +189,7 @@ mod tests {
             device: "device".to_string(),
             distro: "archlinux".to_string(),
             no_color: true,
+            dotted: crate::types::DottedFile::default(),
         };
 
         let artifact_dir = runtime.dotted_dir.join("[artifacts]").join("myart");
