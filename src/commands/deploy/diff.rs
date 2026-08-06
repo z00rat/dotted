@@ -21,7 +21,6 @@ use crate::types::Runtime;
 use crate::utils::{show_file_diff, style};
 
 pub fn run(runtime: &Runtime, artifact: Option<&str>, filter: Option<&str>) -> Result<()> {
-    crate::utils::print_banner("DIFFERENCES DETECTED", runtime);
     let plan = build_plan(runtime, artifact)?;
     let matches_filter = |s: &str| -> bool {
         if let Some(f) = filter {

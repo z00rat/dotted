@@ -17,7 +17,6 @@ use crate::types::{ABOUT_TOML, AboutFile, Runtime};
 use crate::utils::style;
 
 pub fn run(runtime: &Runtime, name: &str) -> Result<()> {
-    crate::utils::print_banner(&format!("REPOSITORY ABOUT DETAILS: {name}"), runtime);
     let about_path = runtime.dotted_dir.join(name).join(ABOUT_TOML);
     if !about_path.exists() {
         bail!(

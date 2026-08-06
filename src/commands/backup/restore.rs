@@ -19,7 +19,6 @@ use crate::commands::lib::restore_one;
 use crate::types::Runtime;
 
 pub fn run(runtime: &Runtime, timestamp: &str, path: Option<&Path>) -> Result<()> {
-    crate::utils::print_banner("RESTORE BACKUP", runtime);
     let root = runtime.backup_root().join(timestamp);
     if !root.exists() {
         bail!("backup timestamp not found: {timestamp}");

@@ -243,7 +243,8 @@ pub(crate) fn ensure_about_entry(runtime: &Runtime, repo: &str, artifact: &str) 
             r: 1,
             description: String::new(),
         });
-    crate::types::write_toml(&path, &about)
+    crate::types::write_toml(&path, &about)?;
+    crate::utils::chown_path_tree_if_root(runtime, &path)
 }
 
 pub(crate) fn matches_any_glob(path: &Path, patterns: &BTreeSet<PathBuf>) -> bool {

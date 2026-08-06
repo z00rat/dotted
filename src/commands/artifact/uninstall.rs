@@ -107,7 +107,6 @@ fn perform_removal(runtime: &Runtime, target_plan: &Plan) -> Result<()> {
 }
 
 pub fn run(runtime: &Runtime, artifact_id: &str, yes: bool) -> Result<()> {
-    crate::utils::print_banner("REMOVING ARTIFACT", runtime);
     let target_plan = build_plan(runtime, Some(artifact_id))?;
     if target_plan.artifacts.is_empty() {
         bail!("artifact not found: {artifact_id}");

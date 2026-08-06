@@ -88,7 +88,6 @@ fn print_artifact_changes(
 }
 
 pub fn run(runtime: &Runtime, args: &crate::cli::ApplyArgs) -> Result<()> {
-    crate::utils::print_banner("APPLYING ARTIFACTS", runtime);
     let plan = build_plan(runtime, args.artifact.as_deref())?;
 
     let mut artifacts_to_apply = Vec::new();

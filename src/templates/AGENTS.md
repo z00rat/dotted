@@ -226,6 +226,24 @@ Execute these commands to audit system state and report untracked items to the u
    pacman -Qii | awk '/^Backup Files/ {in_bf=1} /^[A-Z][a-zA-Z0-9 ]*:/ && !/^Backup Files/ {in_bf=0} in_bf && /\/etc\// && /\[modified\]/ {for(i=1;i<=NF;i++) if($i ~ /^\/etc\//) print $i}' | sort
    ```
 
+4. **List Flatpak Packages**:
+
+   ```bash
+   flatpak list --app --columns=name,application,description
+   ```
+
+5. **List System Services**:
+
+   ```bash
+   systemctl list-units --type=service --no-legend --no-pager | awk '{name=$1; $1=$2=$3=$4=""; sub(/^ +/, ""); print name "\t" $0}'
+   ```
+
+6. **List User Services**:
+
+   ```bash
+   systemctl --user list-units --type=service --no-legend --no-pager | awk '{name=$1; $1=$2=$3=$4=""; sub(/^ +/, ""); print name "\t" $0}'
+   ```
+
 ---
 
 ## 6. Memory Protocol (`memory.md`)

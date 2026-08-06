@@ -20,7 +20,6 @@ use crate::types::{Runtime, SettingsFile};
 use crate::utils::style;
 
 pub fn run(runtime: &Runtime, artifact_ids: &[String]) -> Result<()> {
-    crate::utils::print_banner("ENABLING ARTIFACTS", runtime);
     let artifacts = discover_artifacts(runtime)?;
     for artifact_id in artifact_ids {
         if !artifacts.contains_key(artifact_id) {

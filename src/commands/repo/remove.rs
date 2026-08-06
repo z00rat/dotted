@@ -20,7 +20,6 @@ use crate::types::{Runtime, SettingsFile};
 use crate::utils::confirm;
 
 pub fn run(runtime: &Runtime, name: &str) -> Result<()> {
-    crate::utils::print_banner("REMOVING REPOSITORY CONFIGURATION", runtime);
     let mut dotted = load_dotted(runtime)?;
 
     let is_other = dotted.repos.iter().any(|r| r.name == name);

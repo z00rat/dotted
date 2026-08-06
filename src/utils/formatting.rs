@@ -120,10 +120,3 @@ pub(crate) fn show_file_diff(file: &PlannedFile, current: &[u8], runtime: &Runti
         );
     }
 }
-
-pub(crate) fn print_banner(title: &str, runtime: &Runtime) {
-    let width = 80;
-    println!("{}", style(&"═".repeat(width), "36;1", runtime));
-    println!("{}", style(&format!("  {title}"), "33;1", runtime));
-    println!("{}", style(&"═".repeat(width), "36;1", runtime));
-}

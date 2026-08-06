@@ -231,6 +231,8 @@ fn adopt_single_path(
         }
         fs::copy(src, destination)?;
     }
+    crate::utils::ensure_user_writable(destination)?;
+    crate::utils::chown_path_tree_if_root(runtime, destination)?;
     println!(
         "Adopted {} into {}",
         style(&src.to_string_lossy(), "32", runtime),
@@ -240,7 +242,6 @@ fn adopt_single_path(
 }
 
 pub fn run(runtime: &Runtime, artifact_id: &str, paths: Vec<PathBuf>) -> Result<()> {
-    crate::utils::print_banner("ADOPTING ARTIFACT", runtime);
     let (repo, artifact) = split_artifact_id(artifact_id)?;
     let target_paths = if !paths.is_empty() {
         paths
@@ -265,6 +266,7 @@ pub fn run(runtime: &Runtime, artifact_id: &str, paths: Vec<PathBuf>) -> Result<
     }
 
     ensure_about_entry(runtime, repo, artifact)?;
+    crate::utils::chown_path_tree_if_root(runtime, &repo_dir)?;
     Ok(())
 }
 

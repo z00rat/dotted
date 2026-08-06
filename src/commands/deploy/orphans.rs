@@ -227,7 +227,6 @@ fn print_services_inventory(runtime: &Runtime, plan: &crate::types::Plan, filter
 }
 
 pub fn run(runtime: &Runtime, filter: Option<&str>) -> Result<()> {
-    crate::utils::print_banner("ORPHANS INVENTORY REPORT", runtime);
     let plan = build_plan(runtime, None)?;
 
     print_native_packages_inventory(runtime, &plan, filter);

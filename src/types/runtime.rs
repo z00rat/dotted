@@ -155,3 +155,18 @@ pub(crate) fn get_passwd_home(username: &str) -> Option<PathBuf> {
     }
     None
 }
+
+pub(crate) fn get_passwd_uid_gid(username: &str) -> Option<(u32, u32)> {
+    if let Ok(content) = fs::read_to_string("/etc/passwd") {
+        for line in content.lines() {
+            let parts: Vec<&str> = line.split(':').collect();
+            if parts.len() >= 4
+                && parts[0] == username
+                && let (Ok(uid), Ok(gid)) = (parts[2].parse::<u32>(), parts[3].parse::<u32>())
+            {
+                return Some((uid, gid));
+            }
+        }
+    }
+    None
+}

@@ -21,7 +21,6 @@ use crate::types::Runtime;
 use crate::utils::style;
 
 pub fn run(runtime: &Runtime, timestamp: Option<&str>, filter: Option<&Path>) -> Result<()> {
-    crate::utils::print_banner("LIST BACKUPS", runtime);
     if let Some(ts) = timestamp {
         let root = runtime.backup_root().join(ts);
         if !root.exists() {

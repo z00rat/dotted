@@ -171,7 +171,6 @@ fn print_artifacts_section(
 }
 
 pub fn run(runtime: &Runtime, artifact: Option<&str>, filter: Option<&str>) -> Result<()> {
-    crate::utils::print_banner("STATUS REPORT", runtime);
     let plan = build_plan(runtime, artifact)?;
 
     let show = |section: &str| filter.is_none_or(|f| f == section);

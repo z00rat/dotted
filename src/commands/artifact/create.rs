@@ -18,7 +18,6 @@ use crate::types::Runtime;
 use crate::utils::style;
 
 pub fn run(runtime: &Runtime, artifact_name: &str) -> Result<()> {
-    crate::utils::print_banner("CREATING NEW ARTIFACT", runtime);
     let (repo, name) = if let Some((r, a)) = artifact_name.split_once('/') {
         if r.is_empty() || a.is_empty() || a.contains('/') {
             color_eyre::eyre::bail!("invalid artifact name format: expected 'name' or 'repo/name'");
@@ -45,6 +44,7 @@ pub fn run(runtime: &Runtime, artifact_name: &str) -> Result<()> {
         crate::types::write_toml(&bin_path, &crate::types::BinFile::default())?;
     }
     ensure_about_entry(runtime, repo, name)?;
+    crate::utils::chown_path_tree_if_root(runtime, &artifact_dir)?;
     let display_id = if repo == "artifacts" {
         format!("/{name}")
     } else {

@@ -124,6 +124,71 @@ fn check_plan_tools(runtime: &Runtime, problems: &mut usize, filter: Option<&str
     }
 }
 
+fn check_file_permissions(runtime: &Runtime, problems: &mut usize, filter: Option<&str>) {
+    if !runtime.dotted_dir.exists() {
+        return;
+    }
+
+    #[cfg(unix)]
+    let is_root = nix::unistd::geteuid().is_root();
+    #[cfg(not(unix))]
+    let is_root = false;
+
+    let mut root_owned_paths = Vec::new();
+    for entry in walkdir::WalkDir::new(&runtime.dotted_dir)
+        .into_iter()
+        .flatten()
+    {
+        if crate::utils::is_root_owned(entry.path()) {
+            root_owned_paths.push(entry.path().to_path_buf());
+        }
+    }
+
+    if root_owned_paths.is_empty() {
+        log(
+            &style("ok", "32", runtime),
+            "workspace file ownership",
+            filter,
+        );
+        return;
+    }
+
+    if is_root {
+        log(
+            &style("info", "33", runtime),
+            &format!(
+                "fixing root ownership on {} item(s) in workspace...",
+                root_owned_paths.len()
+            ),
+            filter,
+        );
+        if crate::utils::chown_path_tree_if_root(runtime, &runtime.dotted_dir).is_ok() {
+            log(
+                &style("ok", "32", runtime),
+                "fixed root ownership on workspace files",
+                filter,
+            );
+        } else {
+            *problems += 1;
+            log(
+                &style("bad", "31", runtime),
+                "failed to fix root ownership on workspace files",
+                filter,
+            );
+        }
+    } else {
+        *problems += 1;
+        log(
+            &style("bad", "31", runtime),
+            &format!(
+                "{} item(s) in workspace are owned by root (run 'sudo dotted workspace doctor' to fix ownership)",
+                root_owned_paths.len()
+            ),
+            filter,
+        );
+    }
+}
+
 pub fn run(runtime: &Runtime, filter: Option<&str>) -> Result<()> {
     let enabled = |name: &str| filter.is_none_or(|f| f == name);
     let mut problems = 0usize;
@@ -139,6 +204,7 @@ pub fn run(runtime: &Runtime, filter: Option<&str>) -> Result<()> {
 
     if enabled("config") {
         check_toml_files(runtime, &mut problems, None)?;
+        check_file_permissions(runtime, &mut problems, None);
     }
 
     if enabled("repo") {

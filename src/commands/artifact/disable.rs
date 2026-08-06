@@ -19,7 +19,6 @@ use crate::types::{Runtime, SettingsFile};
 use crate::utils::style;
 
 pub fn run(runtime: &Runtime, artifact_ids: &[String]) -> Result<()> {
-    crate::utils::print_banner("DISABLING ARTIFACTS", runtime);
     let path = settings_path(runtime);
     let mut file: SettingsFile = if path.exists() {
         crate::types::read_toml(&path)?

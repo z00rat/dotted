@@ -7,10 +7,11 @@ pub(crate) mod status_color;
 pub(crate) mod sys;
 
 pub(crate) use formatting::{
-    confirm, is_terminal_color, print_banner, print_new_file_content, show_file_diff, style,
+    confirm, is_terminal_color, print_new_file_content, show_file_diff, style,
 };
 pub(crate) use fs::{
-    backup_file, cmp_dir_entries, cmp_walkdir_entries, preserve_source_permissions,
+    backup_file, chown_path_tree_if_root, cmp_dir_entries, cmp_walkdir_entries,
+    ensure_user_writable, is_root_owned, preserve_source_permissions,
 };
 pub(crate) use shell::run_git;
 pub(crate) use status_color::status_color;

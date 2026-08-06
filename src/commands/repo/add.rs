@@ -16,7 +16,6 @@ use crate::commands::lib::{configured_repos, load_dotted};
 use crate::types::{RepoConfig, Runtime};
 
 pub fn run(runtime: &Runtime, name: &str, git_url: &str) -> Result<()> {
-    crate::utils::print_banner("ADDING REPOSITORY CONFIGURATION", runtime);
     let mut dotted = load_dotted(runtime)?;
     if configured_repos(&dotted)
         .iter()

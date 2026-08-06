@@ -47,7 +47,6 @@ pub fn run(runtime: &Runtime, filter: Option<&str>, raw: bool, state: Option<&st
         return Ok(());
     }
 
-    crate::utils::print_banner("LIST ARTIFACT RESOURCES", runtime);
     if artifacts.is_empty() {
         println!("No matching artifacts.");
         return Ok(());
