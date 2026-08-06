@@ -178,7 +178,6 @@ pub(crate) fn apply_packages_and_downloads(
             .collect();
         if !missing.is_empty() {
             let command = native_package_command(distro, &missing, package_commands)?;
-            let command = crate::utils::shell_join(&command);
             println!("native packages ({distro}): {command}");
             commands.push(command);
         }

@@ -40,6 +40,10 @@ pub fn run(runtime: &Runtime, artifact_name: &str) -> Result<()> {
 
     let artifact_dir = repository_path(runtime, repo).join(name);
     fs::create_dir_all(&artifact_dir)?;
+    let bin_path = artifact_dir.join(crate::types::BIN_TOML);
+    if !bin_path.exists() {
+        crate::types::write_toml(&bin_path, &crate::types::BinFile::default())?;
+    }
     ensure_about_entry(runtime, repo, name)?;
     let display_id = if repo == "artifacts" {
         format!("/{name}")

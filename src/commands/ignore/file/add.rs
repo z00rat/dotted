@@ -55,10 +55,13 @@ pub fn run(runtime: &Runtime, paths: &[PathBuf]) -> Result<()> {
             if !file.ignore.folder.contains(&value) {
                 file.ignore.folder.push(value.clone());
             }
-        } else if !file.ignore.file.contains(&value) {
-            file.ignore.file.push(value.clone());
+            println!("Ignored folder {}", style(&value, "32", runtime));
+        } else {
+            if !file.ignore.file.contains(&value) {
+                file.ignore.file.push(value.clone());
+            }
+            println!("Ignored file {}", style(&value, "32", runtime));
         }
-        println!("Ignored file or folder {}", style(&value, "32", runtime));
     }
     file.ignore.file.sort();
     file.ignore.folder.sort();

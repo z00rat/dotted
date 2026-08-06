@@ -21,6 +21,8 @@ pub(crate) const DOTTED_TOML: &str = "[dotted].toml";
 pub(crate) const LOCAL_TOML: &str = "[local].toml";
 pub(crate) const ARTIFACTS_DIR: &str = "[artifacts]";
 pub(crate) const SETTINGS_DIR: &str = "[settings]";
+pub(crate) const AGENTS_MD: &str = "AGENTS.md";
+pub(crate) const MEMORY_MD: &str = "memory.md";
 pub(crate) const ABOUT_TOML: &str = "[about].toml";
 pub(crate) const BIN_TOML: &str = "[bin].toml";
 pub(crate) const FALLBACK_DEVICE: &str = "[device]";
@@ -37,8 +39,13 @@ pub(crate) const DEFAULT_GITIGNORE: &str = r"# Ignore everything
 !\[settings\]/**
 !\[artifacts\]/
 !\[artifacts\]/**
+!AGENTS.md
+!memory.md
 !.gitignore
 ";
+
+pub(crate) const DEFAULT_AGENTS_MD: &str = include_str!("../templates/AGENTS.md");
+pub(crate) const DEFAULT_MEMORY_MD: &str = include_str!("../templates/memory.md");
 
 pub(crate) fn read_toml<T>(path: &Path) -> Result<T>
 where

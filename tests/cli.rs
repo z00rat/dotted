@@ -348,6 +348,30 @@ fn adopt_file_and_package_updates_artifact_manifest() {
 }
 
 #[test]
+fn adopt_file_shows_diff_and_prompts_on_conflict() {
+    let fixture = Fixture::new();
+    let file_to_adopt = fixture.home.join(".bashrc");
+    fs::write(&file_to_adopt, "line1\nline2_new\n").expect("write bashrc");
+
+    let artifact_file = fixture.meta.join("[artifacts]/git/home/.bashrc");
+    fs::create_dir_all(artifact_file.parent().unwrap()).unwrap();
+    fs::write(&artifact_file, "line1\nline2_old\n").unwrap();
+
+    fixture
+        .cmd()
+        .args(["adopt", "file", "/git", file_to_adopt.to_str().unwrap()])
+        .write_stdin("r\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Conflict in"))
+        .stdout(predicate::str::contains("-line2_old"))
+        .stdout(predicate::str::contains("+line2_new"));
+
+    let adopted = fs::read_to_string(&artifact_file).unwrap();
+    assert_eq!(adopted, "line1\nline2_new\n");
+}
+
+#[test]
 fn adopt_service_updates_artifact_manifest() {
     let fixture = Fixture::new();
 
@@ -547,7 +571,7 @@ fn artifact_create_scaffolds_directory_structure() {
         .success()
         .stdout(predicate::str::contains("Created /zsh"));
 
-    assert!(fixture.meta.join("[artifacts]/zsh").exists());
+    assert!(fixture.meta.join("[artifacts]/zsh/[bin].toml").exists());
 }
 
 #[test]
@@ -679,6 +703,233 @@ fn ignore_file_scan_recursively_lists_paths() {
         .success()
         .stdout(predicate::str::contains("[masked]"))
         .stdout(predicate::str::contains("git/"));
+}
+
+#[test]
+fn ignore_file_scan_marks_empty_tracked_folders_as_tracked() {
+    let fixture = Fixture::new();
+
+    let artifact_empty_dir = fixture.meta.join("[artifacts]/git/home/.config/git/themes");
+    fs::create_dir_all(&artifact_empty_dir).unwrap();
+
+    let target_empty_dir = fixture.home.join(".config/git/themes");
+    fs::create_dir_all(&target_empty_dir).unwrap();
+
+    let git_dir = fixture.home.join(".config/git");
+
+    fixture
+        .cmd()
+        .args([
+            "ignore",
+            "file",
+            "scan",
+            "--path",
+            git_dir.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[tracked]   themes/"));
+}
+
+#[test]
+fn ignore_file_scan_sorts_directories_first_case_insensitively() {
+    let fixture = Fixture::new();
+
+    let test_dir = fixture.home.join(".config/testdir");
+    fs::create_dir_all(test_dir.join("Thunar")).unwrap();
+    fs::create_dir_all(test_dir.join("activitywatch")).unwrap();
+    fs::write(test_dir.join("accels.scm"), "content").unwrap();
+
+    let output = fixture
+        .cmd()
+        .args([
+            "ignore",
+            "file",
+            "scan",
+            "--path",
+            test_dir.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let pos_aw = stdout.find("activitywatch/").expect("found activitywatch");
+    let pos_thunar = stdout.find("Thunar/").expect("found Thunar");
+    let pos_file = stdout.find("accels.scm").expect("found accels.scm");
+
+    assert!(
+        pos_aw < pos_thunar,
+        "activitywatch/ should come before Thunar/"
+    );
+    assert!(
+        pos_thunar < pos_file,
+        "Thunar/ (directory) should come before accels.scm (file)"
+    );
+}
+
+#[test]
+fn ignore_file_scan_marks_all_ignored_folder_as_ignored() {
+    let fixture = Fixture::new();
+
+    let config_dir = fixture.home.join(".config");
+    let store_dir = config_dir.join("configstore/update-notifier-@google");
+    fs::create_dir_all(&store_dir).unwrap();
+    fs::write(store_dir.join("gemini-cli.json"), "{}").unwrap();
+
+    let target_file = store_dir.join("gemini-cli.json");
+    let rel_file = target_file.strip_prefix(&fixture.home).unwrap();
+
+    fixture
+        .cmd()
+        .current_dir(&fixture.home)
+        .args(["ignore", "file", "add", rel_file.to_str().unwrap()])
+        .assert()
+        .success();
+
+    fixture
+        .cmd()
+        .args([
+            "ignore",
+            "file",
+            "scan",
+            "--path",
+            config_dir.join("configstore").to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "[ignored]   update-notifier-@google/",
+        ));
+
+    fixture
+        .cmd()
+        .args([
+            "ignore",
+            "file",
+            "scan",
+            "--path",
+            config_dir.join("configstore").to_str().unwrap(),
+            "--filter",
+            "untracked",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("update-notifier-@google").not());
+}
+
+#[test]
+fn ignore_file_scan_shows_tracked_file_under_masked_ignored_folder() {
+    let fixture = Fixture::new();
+
+    let config_dir = fixture.home.join(".config");
+    let bashtop_dir = config_dir.join("bashtop");
+    fs::create_dir_all(&bashtop_dir).unwrap();
+    fs::write(bashtop_dir.join("bashtop.cfg"), "tracked_content").unwrap();
+    fs::write(bashtop_dir.join("cache.tmp"), "untracked_content").unwrap();
+
+    let themes_dir = bashtop_dir.join("themes");
+    fs::create_dir_all(&themes_dir).unwrap();
+    fs::write(themes_dir.join("light.theme"), "theme").unwrap();
+
+    // Adopt bashtop.cfg into enabled artifact 'artifacts/git' so it becomes tracked
+    fixture
+        .cmd()
+        .current_dir(&fixture.home)
+        .args([
+            "adopt",
+            "file",
+            "artifacts/git",
+            ".config/bashtop/bashtop.cfg",
+        ])
+        .assert()
+        .success();
+
+    // Add .config/bashtop to ignored_folders
+    fixture
+        .cmd()
+        .args(["ignore", "file", "add", bashtop_dir.to_str().unwrap()])
+        .assert()
+        .success();
+
+    // Deploy files so tracked bashtop.cfg exists on disk
+    fixture
+        .cmd()
+        .args(["deploy", "apply", "--yes"])
+        .assert()
+        .success();
+
+    let output = fixture
+        .cmd()
+        .args([
+            "ignore",
+            "file",
+            "scan",
+            "--path",
+            config_dir.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.contains("[masked]"),
+        "Should mark bashtop/ as [masked], got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("bashtop/"),
+        "Should contain bashtop/, got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("[tracked]   bashtop.cfg"),
+        "Should show tracked bashtop.cfg under masked bashtop/, got:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("cache.tmp"),
+        "Should NOT show untracked cache.tmp inside ignored bashtop/, got:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("themes/"),
+        "Should NOT show untracked themes/ inside ignored bashtop/, got:\n{stdout}"
+    );
+}
+
+#[test]
+fn ignore_file_list_treats_symlink_to_dir_as_dir() {
+    let fixture = Fixture::new();
+
+    let target_dir = fixture.home.join("real_dir");
+    fs::create_dir_all(&target_dir).unwrap();
+
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&target_dir, fixture.home.join("sym_dir")).unwrap();
+
+    #[cfg(unix)]
+    {
+        let sym_path = fixture.home.join("sym_dir");
+        fixture
+            .cmd()
+            .args(["ignore", "file", "add", sym_path.to_str().unwrap()])
+            .assert()
+            .success();
+
+        let output = fixture
+            .cmd()
+            .args([
+                "ignore",
+                "file",
+                "list",
+                "--path",
+                fixture.home.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        assert!(
+            stdout.contains("[ignored]   sym_dir/"),
+            "Should list symlink to dir as [ignored] sym_dir/ with trailing slash, got:\n{stdout}"
+        );
+    }
 }
 
 #[test]

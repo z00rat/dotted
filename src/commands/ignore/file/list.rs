@@ -10,7 +10,9 @@
 ///
 /// Decisions & Logic Branches:
 /// - Evaluates paths against active plan to resolve tracking and ignore states.
+/// - Formats path strings relative to the target root directory (`strip_prefix`).
 /// - Resolves status colors dynamically from `[dotted].toml` settings via `status_color`.
+/// - Sorts directory entries case-insensitively with folders listed before files (`cmp_walkdir_entries`).
 use color_eyre::eyre::Result;
 use std::collections::BTreeSet;
 use std::env;
@@ -20,7 +22,7 @@ use walkdir::WalkDir;
 use crate::commands::lib::matches_any_glob;
 use crate::plan::build_plan;
 use crate::status_color::status_color;
-use crate::types::Runtime;
+use crate::types::{Plan, Runtime};
 use crate::utils::style;
 
 pub fn run(runtime: &Runtime, args: &crate::cli::LsArgs) -> Result<()> {
@@ -46,6 +48,7 @@ pub fn run(runtime: &Runtime, args: &crate::cli::LsArgs) -> Result<()> {
         } else {
             max_depth
         })
+        .sort_by(crate::utils::cmp_walkdir_entries)
         .into_iter();
 
     while let Some(Ok(entry)) = it.next() {
@@ -53,14 +56,14 @@ pub fn run(runtime: &Runtime, args: &crate::cli::LsArgs) -> Result<()> {
             continue;
         }
         let path = entry.path().to_path_buf();
-        let display = runtime.display_path(&path);
-        let display_str = if entry.file_type().is_dir() {
-            format!("{}/", display.display())
+        let is_dir = path.is_dir();
+        let rel_path = path.strip_prefix(&root).unwrap_or(&path);
+        let display_str = if is_dir {
+            format!("{}/", rel_path.display())
         } else {
-            display.display().to_string()
+            rel_path.display().to_string()
         };
 
-        let is_dir = entry.file_type().is_dir();
         let is_ignored_folder = is_dir && plan.ignored_folders.contains(&path);
         let is_ign_file = !is_dir && matches_any_glob(&path, &plan.ignored_files);
 
@@ -70,6 +73,7 @@ pub fn run(runtime: &Runtime, args: &crate::cli::LsArgs) -> Result<()> {
             is_ignored_folder,
             is_ign_file,
             &tracked,
+            &plan,
             has_tracked,
         );
 
@@ -77,12 +81,11 @@ pub fn run(runtime: &Runtime, args: &crate::cli::LsArgs) -> Result<()> {
             print_item_line(status, &display_str, runtime);
         }
 
-        if is_ignored_folder {
-            if status == "masked" {
-                print_masked_subfiles(&path, &tracked, &show, runtime);
-            }
-            it.skip_current_dir();
-        } else if is_dir && status == "untracked" {
+        if is_ignored_folder && status == "masked" {
+            print_masked_subfiles(&path, &root, &tracked, &show, runtime);
+        }
+
+        if entry.file_type().is_dir() && (is_ignored_folder || status == "untracked") {
             it.skip_current_dir();
         }
     }
@@ -96,6 +99,7 @@ fn classify_item_status(
     is_ignored_folder: bool,
     is_ign_file: bool,
     tracked: &BTreeSet<PathBuf>,
+    plan: &Plan,
     has_tracked: impl Fn(&Path) -> bool,
 ) -> &'static str {
     if is_ignored_folder {
@@ -122,6 +126,8 @@ fn classify_item_status(
                     }
                 });
             if all_tracked { "tracked" } else { "partial" }
+        } else if crate::ignore::is_dir_all_ignored(path, plan) {
+            "ignored"
         } else {
             "untracked"
         }
@@ -144,6 +150,7 @@ fn print_item_line(status: &str, display_str: &str, runtime: &Runtime) {
 
 fn print_masked_subfiles(
     folder: &Path,
+    root: &Path,
     tracked: &BTreeSet<PathBuf>,
     show: &impl Fn(&str) -> bool,
     runtime: &Runtime,
@@ -155,11 +162,11 @@ fn print_masked_subfiles(
 
     for sub_file in sub_tracked {
         if sub_file.exists() && show("tracked") {
-            let sub_display = runtime.display_path(sub_file);
+            let rel_sub = sub_file.strip_prefix(root).unwrap_or(sub_file);
             let sub_str = if sub_file.is_dir() {
-                format!("{}/", sub_display.display())
+                format!("{}/", rel_sub.display())
             } else {
-                sub_display.display().to_string()
+                rel_sub.display().to_string()
             };
             print_item_line("tracked", &sub_str, runtime);
         }

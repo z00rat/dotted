@@ -1,8 +1,7 @@
-use color_eyre::eyre::{Result, bail};
-
 use crate::commands::lib::settings_path;
 use crate::types::{Runtime, SettingsFile};
 use crate::utils::style;
+use color_eyre::eyre::{Result, bail};
 
 #[derive(Clone, Copy)]
 pub(crate) enum IgnoreKind {
@@ -11,21 +10,21 @@ pub(crate) enum IgnoreKind {
 }
 
 impl IgnoreKind {
-    fn entries(self, file: &mut SettingsFile) -> &mut Vec<String> {
+    pub(crate) fn entries(self, file: &mut SettingsFile) -> &mut Vec<String> {
         match self {
             Self::Package => &mut file.ignore.package,
             Self::Service => &mut file.ignore.service,
         }
     }
 
-    fn noun(self) -> &'static str {
+    pub(crate) fn noun(self) -> &'static str {
         match self {
             Self::Package => "package",
             Self::Service => "service",
         }
     }
 
-    fn title(self) -> &'static str {
+    pub(crate) fn title(self) -> &'static str {
         match self {
             Self::Package => "Packages",
             Self::Service => "Services",
@@ -33,7 +32,7 @@ impl IgnoreKind {
     }
 }
 
-fn read_settings(runtime: &Runtime) -> Result<(std::path::PathBuf, SettingsFile)> {
+pub(crate) fn read_settings(runtime: &Runtime) -> Result<(std::path::PathBuf, SettingsFile)> {
     let path = settings_path(runtime);
     let file = if path.exists() {
         crate::types::read_toml(&path)?
@@ -43,7 +42,7 @@ fn read_settings(runtime: &Runtime) -> Result<(std::path::PathBuf, SettingsFile)
     Ok((path, file))
 }
 
-fn prompt_one(kind: IgnoreKind) -> Result<Option<String>> {
+pub(crate) fn prompt_one(kind: IgnoreKind) -> Result<Option<String>> {
     print!("Enter {} name to ignore: ", kind.noun());
     std::io::Write::flush(&mut std::io::stdout())?;
     let mut input = String::new();
@@ -84,7 +83,11 @@ pub(crate) fn add(runtime: &Runtime, kind: IgnoreKind, values: &[String]) -> Res
     crate::types::write_toml(&path, &file)
 }
 
-fn select_entry(runtime: &Runtime, kind: IgnoreKind, entries: &[String]) -> Result<String> {
+pub(crate) fn select_entry(
+    runtime: &Runtime,
+    kind: IgnoreKind,
+    entries: &[String],
+) -> Result<String> {
     if runtime.no_color {
         println!("Select a {} ignore entry to remove:", kind.noun());
         for (index, entry) in entries.iter().enumerate() {
@@ -170,4 +173,23 @@ pub(crate) fn list(runtime: &Runtime, title: &str, entries: &std::collections::B
             println!("  - {}", style(entry, "90", runtime));
         }
     }
+}
+
+pub(crate) fn is_dir_all_ignored(dir: &std::path::Path, plan: &crate::types::Plan) -> bool {
+    let Ok(read) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    let entries: Vec<_> = read.filter_map(Result::ok).collect();
+    if entries.is_empty() {
+        return false;
+    }
+    entries.iter().all(|entry| {
+        let path = entry.path();
+        let is_dir = path.is_dir();
+        if is_dir {
+            plan.ignored_folders.contains(&path) || is_dir_all_ignored(&path, plan)
+        } else {
+            crate::commands::lib::matches_any_glob(&path, &plan.ignored_files)
+        }
+    })
 }

@@ -220,7 +220,7 @@ Incorporate existing system files and packages into your workspace.
   ```bash
   dotted adopt file <artifact_id> [paths...]
   ```
-  _If paths are omitted, starts an interactive file browser to pick a file/directory._
+  _If paths are omitted, starts an interactive file browser to pick a file/directory. If a file already exists in the destination artifact, a diff is displayed with an interactive prompt to overwrite, keep, or abort._
 - **Adopt a system package**:
   ```bash
   dotted adopt package <artifact_id> [package_name] [--type archlinux|fedora|ubuntu|flatpak]

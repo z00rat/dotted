@@ -3,10 +3,10 @@ use color_eyre::Result;
 
 pub(crate) mod cli;
 pub(crate) mod commands;
-pub(crate) mod plan;
-pub(crate) mod status_color;
 pub(crate) mod types;
 pub(crate) mod utils;
+
+pub(crate) use utils::{ignore, plan, status_color};
 
 use cli::{
     AdoptCommands, ArtifactCommands, BackupCommands, Cli, Commands, DeployCommands, IgnoreCommands,

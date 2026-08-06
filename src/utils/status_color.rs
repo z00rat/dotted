@@ -1,9 +1,5 @@
-/// Status Color Helper
-///
-/// Resolves user-configured terminal ANSI color codes for file/directory tracking status tags
-/// (`[tracked]`, `[partial]`, `[untracked]`, `[ignored]`, `[masked]`) based on `[dotted].toml` settings.
+use super::formatting::color_to_ansi;
 use crate::types::Runtime;
-use crate::utils::color_to_ansi;
 
 pub(crate) fn status_color(status: &str, runtime: &Runtime) -> String {
     let color_name = match status {

@@ -28,7 +28,7 @@ pub fn run(runtime: &Runtime, timestamp: Option<&str>, filter: Option<&Path>) ->
             bail!("backup timestamp not found: {ts}");
         }
         println!("Files in backup {ts}:");
-        for entry in WalkDir::new(&root) {
+        for entry in WalkDir::new(&root).sort_by(crate::utils::cmp_walkdir_entries) {
             let entry = entry?;
             if !entry.file_type().is_file() {
                 continue;
@@ -50,8 +50,11 @@ pub fn run(runtime: &Runtime, timestamp: Option<&str>, filter: Option<&Path>) ->
             println!("No backups found.");
             return Ok(());
         }
-        for entry in fs::read_dir(runtime.backup_root())? {
-            let entry = entry?;
+        let mut entries = fs::read_dir(runtime.backup_root())?
+            .filter_map(Result::ok)
+            .collect::<Vec<_>>();
+        entries.sort_by(crate::utils::cmp_dir_entries);
+        for entry in entries {
             let name = entry.file_name().to_string_lossy().to_string();
             if let Ok(ts_val) = name.parse::<i64>() {
                 let dt = chrono::DateTime::from_timestamp(ts_val, 0)

@@ -69,7 +69,7 @@ fn print_binaries_and_deps(runtime: &Runtime, artifact: &crate::types::Artifact)
 fn print_artifact_files(_runtime: &Runtime, artifact: &crate::types::Artifact) -> Result<()> {
     println!("Files:");
     let mut walked_any = false;
-    for entry in WalkDir::new(&artifact.dir) {
+    for entry in WalkDir::new(&artifact.dir).sort_by(crate::utils::cmp_walkdir_entries) {
         let entry = entry?;
         if entry.file_type().is_file() {
             let rel_path = entry.path().strip_prefix(&artifact.dir)?;

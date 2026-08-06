@@ -32,8 +32,73 @@ fn is_dotted_config_toml(path: &Path, dotted_dir: &Path) -> bool {
     false
 }
 
+fn sync_agents_and_gitignore(runtime: &Runtime) -> Result<()> {
+    let gitignore_path = runtime.dotted_dir.join(".gitignore");
+    if gitignore_path.exists() {
+        if fs::read_to_string(&gitignore_path).is_ok_and(|c| !c.contains("!AGENTS.md")) {
+            fs::write(&gitignore_path, crate::types::DEFAULT_GITIGNORE)?;
+            println!(
+                "Updated {}",
+                style(
+                    &runtime.display_path(&gitignore_path).to_string_lossy(),
+                    "32",
+                    runtime
+                )
+            );
+        }
+    } else {
+        fs::write(&gitignore_path, crate::types::DEFAULT_GITIGNORE)?;
+    }
+
+    let agents_md_path = runtime.dotted_dir.join(crate::types::AGENTS_MD);
+    let compiled_agents = crate::types::DEFAULT_AGENTS_MD;
+    let existing_agents = fs::read_to_string(&agents_md_path).unwrap_or_default();
+    if existing_agents != compiled_agents {
+        fs::write(&agents_md_path, compiled_agents)?;
+        println!(
+            "Updated {}",
+            style(
+                &runtime.display_path(&agents_md_path).to_string_lossy(),
+                "32",
+                runtime
+            )
+        );
+    }
+
+    let memory_md_path = runtime.dotted_dir.join(crate::types::MEMORY_MD);
+    if !memory_md_path.exists() {
+        let compiled_memory = crate::types::DEFAULT_MEMORY_MD;
+        fs::write(&memory_md_path, compiled_memory)?;
+        println!(
+            "Created {}",
+            style(
+                &runtime.display_path(&memory_md_path).to_string_lossy(),
+                "32",
+                runtime
+            )
+        );
+    }
+
+    Ok(())
+}
+
 pub fn run(runtime: &Runtime) -> Result<()> {
+    sync_agents_and_gitignore(runtime)?;
     let mut formatted_count = 0;
+
+    let artifacts = crate::plan::discover_artifacts(runtime)?;
+    for artifact in artifacts.values() {
+        let bin_path = artifact.dir.join(crate::types::BIN_TOML);
+        if !bin_path.exists() {
+            crate::types::write_toml(&bin_path, &crate::types::BinFile::default())?;
+            let display = runtime.display_path(&bin_path);
+            println!(
+                "Created {}",
+                style(&display.to_string_lossy(), "32", runtime)
+            );
+        }
+    }
+
     for entry in WalkDir::new(&runtime.dotted_dir)
         .into_iter()
         .filter_entry(|e| {

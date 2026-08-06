@@ -6,7 +6,10 @@ use color_eyre::eyre::{Result, bail};
 use std::fs;
 
 use crate::commands::lib::settings_path;
-use crate::types::{ARTIFACTS_DIR, ColorSection, ConfigSection, DottedFile, Runtime, SettingsFile};
+use crate::types::{
+    AGENTS_MD, ARTIFACTS_DIR, ColorSection, ConfigSection, DEFAULT_AGENTS_MD, DEFAULT_MEMORY_MD,
+    DottedFile, MEMORY_MD, Runtime, SettingsFile,
+};
 use crate::utils::run_git;
 
 fn write_config_files(runtime: &Runtime) -> Result<()> {
@@ -25,6 +28,16 @@ fn write_config_files(runtime: &Runtime) -> Result<()> {
         fs::write(gitignore, crate::types::DEFAULT_GITIGNORE)?;
     }
     fs::create_dir_all(runtime.dotted_dir.join(ARTIFACTS_DIR))?;
+
+    let agents_md = runtime.dotted_dir.join(AGENTS_MD);
+    if !agents_md.exists() {
+        fs::write(&agents_md, DEFAULT_AGENTS_MD)?;
+    }
+    let memory_md = runtime.dotted_dir.join(MEMORY_MD);
+    if !memory_md.exists() {
+        fs::write(&memory_md, DEFAULT_MEMORY_MD)?;
+    }
+
     let fallback = runtime.settings_root().join("[device]").join("[user].toml");
     if !fallback.exists() {
         crate::types::write_toml(&fallback, &SettingsFile::default())?;

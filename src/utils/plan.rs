@@ -1,15 +1,14 @@
+use crate::types::{
+    ABOUT_TOML, AboutFile, Artifact, BIN_TOML, BinFile, DOTTED_TOML, DottedFile, DownloadInstall,
+    DownloadSource, DownloadSpec, FALLBACK_DEVICE, FALLBACK_USER, Plan, PlannedDownload,
+    PlannedFile, Runtime, SETTINGS_DIR, Settings,
+};
 use color_eyre::eyre::{ContextCompat, Result, WrapErr, anyhow, bail};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use walkdir::WalkDir;
-
-use crate::types::{
-    ABOUT_TOML, AboutFile, Artifact, BIN_TOML, BinFile, DOTTED_TOML, DottedFile, DownloadInstall,
-    DownloadSource, DownloadSpec, FALLBACK_DEVICE, FALLBACK_USER, Plan, PlannedDownload,
-    PlannedFile, Runtime, SETTINGS_DIR, Settings,
-};
 
 pub(crate) fn load_settings(runtime: &Runtime) -> Result<Settings> {
     let mut settings = Settings::empty();
@@ -122,6 +121,20 @@ fn collect_enabled_artifacts(runtime: &Runtime, only: Option<&str>) -> Result<Ve
     }
     artifacts.sort_by(|left, right| left.id.cmp(&right.id));
     Ok(artifacts)
+}
+
+pub(crate) fn text_with_replace(
+    bytes: &[u8],
+    replace: &BTreeMap<String, String>,
+) -> Option<String> {
+    if bytes.contains(&0) {
+        return None;
+    }
+    let mut text = String::from_utf8(bytes.to_vec()).ok()?;
+    for (from, to) in replace {
+        text = text.replace(from, to);
+    }
+    Some(text)
 }
 
 fn build_planned_files(
@@ -396,20 +409,6 @@ pub(crate) fn map_artifact_path(runtime: &Runtime, relative: &Path) -> Result<(P
         other => runtime.resolve_abs_target(&PathBuf::from("/").join(other).join(rest)),
     };
     Ok((target, display))
-}
-
-pub(crate) fn text_with_replace(
-    bytes: &[u8],
-    replace: &BTreeMap<String, String>,
-) -> Option<String> {
-    if bytes.contains(&0) {
-        return None;
-    }
-    let mut text = String::from_utf8(bytes.to_vec()).ok()?;
-    for (from, to) in replace {
-        text = text.replace(from, to);
-    }
-    Some(text)
 }
 
 pub(crate) fn detect_distro() -> String {

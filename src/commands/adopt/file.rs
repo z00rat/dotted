@@ -10,10 +10,11 @@
 ///
 /// Decisions & Logic Branches:
 /// - Computes workspace-relative source paths using `artifact_relative_from_system_path`.
-/// - Fails if any file already exists at the computed target path in the artifact directory before copying.
-/// - Copies all files and records the artifact in `[about].toml`; adoption never enables it.
+/// - Displays file diffs and prompts for conflict resolution (overwrite, keep/skip, or abort) if a target file already exists in the artifact directory.
+/// - Copies files into place and records the artifact in `[about].toml`; adoption never enables it.
 use color_eyre::eyre::{Result, bail};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::commands::lib::{
@@ -124,6 +125,120 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AdoptConflictAction {
+    Overwrite,
+    Keep,
+    Abort,
+}
+
+fn prompt_adopt_conflict_no_color(destination: &Path) -> Result<AdoptConflictAction> {
+    loop {
+        print!(
+            "Conflict in {}. [r]ight (overwrite artifact), [l]eft (keep current artifact), [a]bort? ",
+            destination.display()
+        );
+        std::io::Write::flush(&mut std::io::stdout())?;
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line)?;
+        match line.trim().to_ascii_lowercase().as_str() {
+            "r" | "right" | "y" | "yes" => return Ok(AdoptConflictAction::Overwrite),
+            "l" | "left" | "n" | "no" => return Ok(AdoptConflictAction::Keep),
+            "a" | "abort" => return Ok(AdoptConflictAction::Abort),
+            _ => println!("invalid choice. Please enter 'r', 'l', or 'a'."),
+        }
+    }
+}
+
+fn prompt_adopt_conflict(destination: &Path, runtime: &Runtime) -> Result<AdoptConflictAction> {
+    if runtime.no_color {
+        prompt_adopt_conflict_no_color(destination)
+    } else {
+        let action = cliclack::select(format!("Conflict while adopting {}", destination.display()))
+            .item(
+                AdoptConflictAction::Overwrite,
+                "Overwrite artifact file with source",
+                "",
+            )
+            .item(
+                AdoptConflictAction::Keep,
+                "Keep current artifact file (skip)",
+                "",
+            )
+            .item(AdoptConflictAction::Abort, "Abort adoption", "")
+            .interact()
+            .map_err(|e| color_eyre::eyre::Report::msg(e.to_string()))?;
+
+        print!("\x1B[2J\x1B[H");
+        let _ = std::io::stdout().flush();
+
+        Ok(action)
+    }
+}
+
+fn adopt_single_path(
+    runtime: &Runtime,
+    artifact_id: &str,
+    src: &Path,
+    destination: &Path,
+) -> Result<()> {
+    if src.is_dir() {
+        copy_dir_all(src, destination)?;
+    } else {
+        if destination.exists() {
+            let current_dst_bytes = fs::read(destination)?;
+            let src_bytes = fs::read(src)?;
+            if current_dst_bytes == src_bytes {
+                println!(
+                    "Adopted {} into {} ({})",
+                    style(&src.to_string_lossy(), "32", runtime),
+                    style(artifact_id, "36;1", runtime),
+                    style("unchanged", "32", runtime)
+                );
+                return Ok(());
+            }
+
+            let display_target = destination.to_path_buf();
+            let planned_file = crate::types::PlannedFile {
+                artifact_id: artifact_id.to_string(),
+                source: src.to_path_buf(),
+                target: destination.to_path_buf(),
+                display_target,
+                bytes: src_bytes,
+                text: String::from_utf8(fs::read(src)?).ok(),
+            };
+
+            crate::utils::show_file_diff(&planned_file, &current_dst_bytes, runtime);
+
+            let action = prompt_adopt_conflict(destination, runtime)?;
+            match action {
+                AdoptConflictAction::Overwrite => {}
+                AdoptConflictAction::Keep => {
+                    println!("{} {}", style("skip", "33", runtime), destination.display());
+                    return Ok(());
+                }
+                AdoptConflictAction::Abort => {
+                    bail!(
+                        "aborted by user due to conflict in {}",
+                        destination.display()
+                    );
+                }
+            }
+        }
+
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(src, destination)?;
+    }
+    println!(
+        "Adopted {} into {}",
+        style(&src.to_string_lossy(), "32", runtime),
+        style(artifact_id, "36;1", runtime)
+    );
+    Ok(())
+}
+
 pub fn run(runtime: &Runtime, artifact_id: &str, paths: Vec<PathBuf>) -> Result<()> {
     crate::utils::print_banner("ADOPTING ARTIFACT", runtime);
     let (repo, artifact) = split_artifact_id(artifact_id)?;
@@ -142,26 +257,11 @@ pub fn run(runtime: &Runtime, artifact_id: &str, paths: Vec<PathBuf>) -> Result<
     for src in &target_paths {
         let relative = artifact_relative_from_system_path(runtime, src);
         let destination = artifact_dir.join(&relative);
-        if destination.exists() {
-            bail!("artifact file already exists: {}", destination.display());
-        }
         planned.push((src, destination));
     }
 
     for (src, destination) in &planned {
-        if src.is_dir() {
-            copy_dir_all(src, destination)?;
-        } else {
-            if let Some(parent) = destination.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            fs::copy(src, destination)?;
-        }
-        println!(
-            "Adopted {} into {}",
-            style(&src.to_string_lossy(), "32", runtime),
-            style(artifact_id, "36;1", runtime)
-        );
+        adopt_single_path(runtime, artifact_id, src, destination)?;
     }
 
     ensure_about_entry(runtime, repo, artifact)?;
