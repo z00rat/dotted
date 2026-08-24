@@ -38,8 +38,8 @@ fn log(prefix: &str, text: &str, filter: Option<&str>) {
     }
 }
 
-fn check_toml_files(runtime: &Runtime, problems: &mut usize, filter: Option<&str>) -> Result<()> {
-    for path in control_toml_paths(runtime)? {
+fn check_toml_files(runtime: &Runtime, problems: &mut usize, filter: Option<&str>) {
+    for path in control_toml_paths(runtime) {
         let path_str = runtime.display_path(&path).display().to_string();
         match fs::read_to_string(&path)
             .wrap_err_with(|| format!("read {}", path.display()))
@@ -62,7 +62,6 @@ fn check_toml_files(runtime: &Runtime, problems: &mut usize, filter: Option<&str
             }
         }
     }
-    Ok(())
 }
 
 fn check_repos(runtime: &Runtime, problems: &mut usize, filter: Option<&str>) -> Result<()> {
@@ -203,7 +202,7 @@ pub fn run(runtime: &Runtime, filter: Option<&str>) -> Result<()> {
     );
 
     if enabled("config") {
-        check_toml_files(runtime, &mut problems, None)?;
+        check_toml_files(runtime, &mut problems, None);
         check_file_permissions(runtime, &mut problems, None);
     }
 

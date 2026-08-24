@@ -1,3 +1,6 @@
+use crate::commands::lib::control_toml_paths;
+use crate::types::Runtime;
+use crate::utils::style;
 /// CLI Command: `workspace format`
 ///
 /// What it does:
@@ -13,24 +16,6 @@
 /// - Writes back formatted content if it differs from disk and prints a green status message.
 use color_eyre::eyre::{Context, Result};
 use std::fs;
-use std::path::Path;
-use walkdir::WalkDir;
-
-use crate::types::Runtime;
-use crate::utils::style;
-
-fn is_dotted_config_toml(path: &Path, dotted_dir: &Path) -> bool {
-    if matches!(
-        path.file_name().and_then(|n| n.to_str()),
-        Some("[dotted].toml" | "[local].toml" | "[about].toml" | "[bin].toml")
-    ) {
-        return true;
-    }
-    if let Ok(rel) = path.strip_prefix(dotted_dir) {
-        return rel.starts_with("[settings]") && path.extension().is_some_and(|ext| ext == "toml");
-    }
-    false
-}
 
 fn sync_agents_and_gitignore(runtime: &Runtime) -> Result<()> {
     let gitignore_path = runtime.dotted_dir.join(".gitignore");
@@ -99,43 +84,32 @@ pub fn run(runtime: &Runtime) -> Result<()> {
         }
     }
 
-    for entry in WalkDir::new(&runtime.dotted_dir)
-        .into_iter()
-        .filter_entry(|e| {
-            let name = e.file_name().to_string_lossy();
-            name != ".git" && name != "target"
-        })
-        .filter_map(Result::ok)
-    {
-        let path = entry.path();
-        if path.is_file() && is_dotted_config_toml(path, &runtime.dotted_dir) {
-            let Ok(content) = fs::read_to_string(path) else {
-                continue;
-            };
-            let mut parsed: toml::Value = match toml::from_str(&content) {
-                Ok(v) => v,
-                Err(err) => {
-                    eprintln!(
-                        "Skipping invalid TOML at {}: {err}",
-                        runtime.display_path(path).display()
-                    );
-                    continue;
-                }
-            };
-            crate::types::sort_toml_value(&mut parsed);
-            let formatted = toml::to_string_pretty(&parsed)
-                .wrap_err_with(|| format!("format {}", path.display()))?;
-
-            if content != formatted {
-                fs::write(path, &formatted)
-                    .wrap_err_with(|| format!("write {}", path.display()))?;
-                let display = runtime.display_path(path);
-                println!(
-                    "Formatted {}",
-                    style(&display.to_string_lossy(), "32", runtime)
+    for path in control_toml_paths(runtime) {
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let mut parsed: toml::Value = match toml::from_str(&content) {
+            Ok(v) => v,
+            Err(err) => {
+                eprintln!(
+                    "Skipping invalid TOML at {}: {err}",
+                    runtime.display_path(&path).display()
                 );
-                formatted_count += 1;
+                continue;
             }
+        };
+        crate::types::sort_toml_value(&mut parsed);
+        let formatted = toml::to_string_pretty(&parsed)
+            .wrap_err_with(|| format!("format {}", path.display()))?;
+
+        if content != formatted {
+            fs::write(&path, &formatted).wrap_err_with(|| format!("write {}", path.display()))?;
+            let display = runtime.display_path(&path);
+            println!(
+                "Formatted {}",
+                style(&display.to_string_lossy(), "32", runtime)
+            );
+            formatted_count += 1;
         }
     }
 

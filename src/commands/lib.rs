@@ -8,8 +8,8 @@ use walkdir::WalkDir;
 
 use crate::plan::{normalize_arch, plan_download};
 use crate::types::{
-    ABOUT_TOML, AboutEntry, AboutFile, Artifact, DottedFile, Plan, RepoConfig, Runtime,
-    SETTINGS_DIR,
+    ABOUT_TOML, AboutEntry, AboutFile, Artifact, BIN_TOML, DOTTED_TOML, DottedFile, LOCAL_TOML,
+    Plan, RepoConfig, Runtime, SETTINGS_DIR,
 };
 use crate::utils::{command_lines, run_git, style};
 
@@ -375,21 +375,40 @@ pub(crate) fn restore_one(source: &Path, target: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn control_toml_paths(runtime: &Runtime) -> Result<Vec<PathBuf>> {
+pub(crate) fn is_dotted_config_toml(path: &Path, dotted_dir: &Path) -> bool {
+    let Ok(rel) = path.strip_prefix(dotted_dir) else {
+        return false;
+    };
+    if rel.starts_with(SETTINGS_DIR) && path.extension().is_some_and(|ext| ext == "toml") {
+        return true;
+    }
+    match path.file_name().and_then(|n| n.to_str()) {
+        Some(DOTTED_TOML | LOCAL_TOML) => rel.components().count() == 1,
+        Some(ABOUT_TOML) => {
+            let count = rel.components().count();
+            count == 1 || count == 2
+        }
+        Some(BIN_TOML) => {
+            let count = rel.components().count();
+            count == 2 || count == 3
+        }
+        _ => false,
+    }
+}
+
+pub(crate) fn control_toml_paths(runtime: &Runtime) -> Vec<PathBuf> {
     let mut paths = Vec::new();
-    for entry in WalkDir::new(&runtime.dotted_dir) {
-        let entry = entry?;
-        if entry.file_type().is_file()
-            && entry
-                .path()
-                .extension()
-                .is_some_and(|extension| extension == "toml")
-        {
+    for entry in WalkDir::new(&runtime.dotted_dir)
+        .into_iter()
+        .filter_entry(|e| e.file_name() != ".git")
+        .filter_map(Result::ok)
+    {
+        if entry.file_type().is_file() && is_dotted_config_toml(entry.path(), &runtime.dotted_dir) {
             paths.push(entry.path().to_path_buf());
         }
     }
     paths.sort();
-    Ok(paths)
+    paths
 }
 
 pub(crate) fn artifact_dirs_without_about(

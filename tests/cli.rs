@@ -264,6 +264,24 @@ fn workspace_doctor_validates_healthy_fixture() {
 }
 
 #[test]
+fn workspace_doctor_ignores_payload_toml_files() {
+    let fixture = Fixture::new();
+    let payload_toml = fixture
+        .meta
+        .join("[artifacts]/git/home/.config/alacritty/alacritty.toml");
+    fs::create_dir_all(payload_toml.parent().unwrap()).unwrap();
+    fs::write(&payload_toml, "invalid toml syntax ===\n").unwrap();
+
+    fixture
+        .cmd()
+        .args(["workspace", "doctor"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Doctor: ok"))
+        .stdout(predicate::str::contains("alacritty.toml").not());
+}
+
+#[test]
 fn shell_env_outputs_export_vars_and_logs_overrides() {
     let fixture = Fixture::new();
     let user_settings = fixture.meta.join("[settings]/[device]/[user].toml");
