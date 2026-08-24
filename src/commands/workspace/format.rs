@@ -112,7 +112,7 @@ pub fn run(runtime: &Runtime) -> Result<()> {
             let Ok(content) = fs::read_to_string(path) else {
                 continue;
             };
-            let parsed: toml::Value = match toml::from_str(&content) {
+            let mut parsed: toml::Value = match toml::from_str(&content) {
                 Ok(v) => v,
                 Err(err) => {
                     eprintln!(
@@ -122,6 +122,7 @@ pub fn run(runtime: &Runtime) -> Result<()> {
                     continue;
                 }
             };
+            crate::types::sort_toml_value(&mut parsed);
             let formatted = toml::to_string_pretty(&parsed)
                 .wrap_err_with(|| format!("format {}", path.display()))?;
 

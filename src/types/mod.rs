@@ -65,3 +65,39 @@ where
     let content = toml::to_string_pretty(value)?;
     fs::write(path, content).wrap_err_with(|| format!("write {}", path.display()))
 }
+
+pub(crate) fn sort_toml_value(value: &mut toml::Value) {
+    match value {
+        toml::Value::Array(arr) => {
+            for item in arr.iter_mut() {
+                sort_toml_value(item);
+            }
+            arr.sort_by(|a, b| match (a, b) {
+                (toml::Value::String(s1), toml::Value::String(s2)) => s1.cmp(s2),
+                (toml::Value::Integer(i1), toml::Value::Integer(i2)) => i1.cmp(i2),
+                (toml::Value::Float(f1), toml::Value::Float(f2)) => {
+                    f1.partial_cmp(f2).unwrap_or(std::cmp::Ordering::Equal)
+                }
+                (toml::Value::Boolean(b1), toml::Value::Boolean(b2)) => b1.cmp(b2),
+                (toml::Value::Datetime(d1), toml::Value::Datetime(d2)) => {
+                    d1.to_string().cmp(&d2.to_string())
+                }
+                (toml::Value::Table(t1), toml::Value::Table(t2)) => {
+                    let name1 = t1.get("name").and_then(|v| v.as_str());
+                    let name2 = t2.get("name").and_then(|v| v.as_str());
+                    match (name1, name2) {
+                        (Some(n1), Some(n2)) => n1.cmp(n2),
+                        _ => t1.to_string().cmp(&t2.to_string()),
+                    }
+                }
+                _ => std::cmp::Ordering::Equal,
+            });
+        }
+        toml::Value::Table(table) => {
+            for (_, v) in table.iter_mut() {
+                sort_toml_value(v);
+            }
+        }
+        _ => {}
+    }
+}

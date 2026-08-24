@@ -633,6 +633,112 @@ fn workspace_format_reformats_toml_files() {
 }
 
 #[test]
+fn workspace_format_sorts_arrays() {
+    let fixture = Fixture::new();
+
+    let settings_toml = fixture.meta.join("[settings]/[device]/[user].toml");
+    fs::create_dir_all(settings_toml.parent().unwrap()).unwrap();
+    let unsorted_settings = r#"[artifacts]
+enable = ["z/repo", "a/repo", "m/repo"]
+disable = ["y/repo", "b/repo"]
+
+[ignore]
+folder = ["~/z", "~/a"]
+file = ["~/.z", "~/.a"]
+package = ["zsh", "bash"]
+service = ["z.service", "a.service"]
+"#;
+    fs::write(&settings_toml, unsorted_settings).unwrap();
+
+    let bin_toml = fixture.meta.join("[artifacts]/git/[bin].toml");
+    let unsorted_bin = r#"[distro.archlinux]
+packages = ["zsh", "bash", "curl"]
+
+[services.user]
+units = ["z.service", "a.service"]
+
+[config]
+remove = ["pkg2", "pkg1"]
+"#;
+    fs::write(&bin_toml, unsorted_bin).unwrap();
+
+    fixture
+        .cmd()
+        .args(["workspace", "format"])
+        .assert()
+        .success();
+
+    let settings_content = fs::read_to_string(&settings_toml).unwrap();
+    assert!(
+        settings_content.contains(r#"enable = ["a/repo", "m/repo", "z/repo"]"#)
+            || settings_content.contains(
+                r#"enable = [
+    "a/repo",
+    "m/repo",
+    "z/repo",
+]"#
+            )
+    );
+    assert!(
+        settings_content.contains(r#"disable = ["b/repo", "y/repo"]"#)
+            || settings_content.contains(
+                r#"disable = [
+    "b/repo",
+    "y/repo",
+]"#
+            )
+    );
+    assert!(
+        settings_content.contains(r#"folder = ["~/a", "~/z"]"#)
+            || settings_content.contains(
+                r#"folder = [
+    "~/a",
+    "~/z",
+]"#
+            )
+    );
+    assert!(
+        settings_content.contains(r#"package = ["bash", "zsh"]"#)
+            || settings_content.contains(
+                r#"package = [
+    "bash",
+    "zsh",
+]"#
+            )
+    );
+
+    let bin_content = fs::read_to_string(&bin_toml).unwrap();
+    assert!(
+        bin_content.contains(r#"packages = ["bash", "curl", "zsh"]"#)
+            || bin_content.contains(
+                r#"packages = [
+    "bash",
+    "curl",
+    "zsh",
+]"#
+            )
+    );
+    assert!(
+        bin_content.contains(r#"units = ["a.service", "z.service"]"#)
+            || bin_content.contains(
+                r#"units = [
+    "a.service",
+    "z.service",
+]"#
+            )
+    );
+    assert!(
+        bin_content.contains(r#"remove = ["pkg1", "pkg2"]"#)
+            || bin_content.contains(
+                r#"remove = [
+    "pkg1",
+    "pkg2",
+]"#
+            )
+    );
+}
+
+#[test]
 fn deploy_orphans_audits_unclaimed_packages() {
     let fixture = Fixture::new();
 
