@@ -147,6 +147,7 @@ fn print_downloads_inventory(
             if path.is_file()
                 && !declared_downloads.contains(&display)
                 && !managed_files.contains(&display)
+                && !crate::commands::lib::matches_any_glob(&display, &plan.ignored_files)
             {
                 let _path_str = display.to_string_lossy();
                 unclaimed_downloads.push(display);
@@ -205,7 +206,11 @@ fn print_services_inventory(runtime: &Runtime, plan: &crate::types::Plan, filter
                         }
                     })
                     .collect();
-                let extra: Vec<_> = enabled_units.difference(&declared_units).cloned().collect();
+                let extra: Vec<_> = enabled_units
+                    .difference(&declared_units)
+                    .filter(|unit| !plan.ignored_services.contains(*unit))
+                    .cloned()
+                    .collect();
                 if extra.is_empty() {
                     println!(
                         "    Unclaimed Enabled Services: {}",

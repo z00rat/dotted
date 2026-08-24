@@ -6,7 +6,7 @@
 # Not an AUR PKGBUILD (no remote source tarball).
 
 pkgname=dotted
-pkgver=1.0.4
+pkgver=1.0.7
 pkgrel=1
 pkgdesc="A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages & services."
 arch=('x86_64')
