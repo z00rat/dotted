@@ -231,7 +231,7 @@ pub(crate) enum AdoptCommands {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum DeployCommands {
-    #[command(about = "Show deployment preview and status")]
+    #[command(visible_alias = "plan", about = "Preview pending deployment changes")]
     Status {
         #[arg(help = "Filter status to a specific artifact")]
         artifact: Option<String>,
