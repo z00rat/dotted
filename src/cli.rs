@@ -94,6 +94,12 @@ pub(crate) enum PackageType {
     Flatpak,
 }
 
+#[derive(Clone, Debug, ValueEnum)]
+pub(crate) enum ServiceScope {
+    User,
+    System,
+}
+
 macro_rules! as_str {
     ($type:ty, {$($variant:ident => $value:literal),+ $(,)?}) => {
         impl $type {
@@ -110,6 +116,7 @@ as_str!(StatusFilter, { Artifacts => "artifacts", Files => "files", Env => "env"
 as_str!(OrphanFilter, { Native => "native", Flatpak => "flatpak", Downloads => "downloads", Services => "services" });
 as_str!(FileFilter, { Tracked => "tracked", Untracked => "untracked", Ignored => "ignored", Partial => "partial", Masked => "masked" });
 as_str!(PackageType, { Archlinux => "archlinux", Fedora => "fedora", Ubuntu => "ubuntu", Flatpak => "flatpak" });
+as_str!(ServiceScope, { User => "user", System => "system" });
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
@@ -215,9 +222,9 @@ pub(crate) enum AdoptCommands {
     Service {
         #[arg(help = "Artifact ID (repository/artifact) to adopt service into")]
         artifact: String,
-        #[arg(help = "Service scope ('user' or 'system') or service unit name")]
-        scope_or_service: Option<String>,
-        #[arg(help = "Additional service unit name(s) to add")]
+        #[arg(short, long, help = "Service scope")]
+        scope: Option<ServiceScope>,
+        #[arg(help = "Service unit name(s) to add")]
         services: Vec<String>,
     },
 }

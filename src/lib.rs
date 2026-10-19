@@ -86,9 +86,14 @@ fn run_with_cli(cli: Cli) -> Result<()> {
             ),
             AdoptCommands::Service {
                 artifact,
-                scope_or_service,
+                scope,
                 services,
-            } => commands::adopt::service::run(&runtime, &artifact, scope_or_service, services),
+            } => commands::adopt::service::run(
+                &runtime,
+                &artifact,
+                scope.map(|value| value.as_str().to_owned()),
+                services,
+            ),
         },
         Commands::Deploy(sub) => match sub {
             DeployCommands::Status { artifact, filter } => commands::deploy::status::run(
