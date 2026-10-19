@@ -232,172 +232,178 @@ fn print_services_inventory(runtime: &Runtime, plan: &crate::types::Plan, filter
     }
 }
 
+fn structured_native(plan: &crate::types::Plan) -> serde_json::Value {
+    let mut declared = Vec::new();
+    let mut unclaimed = Vec::new();
+    let mut errors = Vec::new();
+    for (distro, packages) in &plan.packages {
+        for package in packages {
+            declared.push(serde_json::json!({"manager": distro, "name": package}));
+        }
+        match installed_native_packages(distro) {
+            Ok(installed) => {
+                for package in installed.difference(packages) {
+                    if !plan.ignored_packages.contains(package) {
+                        unclaimed.push(serde_json::json!({"manager": distro, "name": package}));
+                    }
+                }
+            }
+            Err(error) => errors.push(format!("{distro}: {error}")),
+        }
+    }
+    serde_json::json!({"declared": declared, "unclaimed": unclaimed, "errors": errors})
+}
+
+fn structured_flatpaks(plan: &crate::types::Plan) -> serde_json::Value {
+    let (unclaimed, error) = match installed_flatpaks() {
+        Ok(installed) => (
+            installed
+                .difference(&plan.flatpaks)
+                .filter(|package| !plan.ignored_packages.contains(*package))
+                .cloned()
+                .collect::<Vec<_>>(),
+            String::new(),
+        ),
+        Err(error) => (Vec::new(), error.to_string()),
+    };
+    serde_json::json!({
+        "declared": plan.flatpaks,
+        "unclaimed": unclaimed,
+        "error": error,
+    })
+}
+
+fn unclaimed_binaries(runtime: &Runtime, plan: &crate::types::Plan) -> Result<Vec<String>> {
+    let declared_downloads: BTreeSet<PathBuf> = plan
+        .downloads
+        .iter()
+        .map(|download| download.display_path.clone())
+        .collect();
+    let managed_files: BTreeSet<PathBuf> = plan
+        .files
+        .iter()
+        .map(|file| file.display_target.clone())
+        .collect();
+    let mut unclaimed = Vec::new();
+    for bin_dir in [
+        runtime.home_dir.join(".local/bin"),
+        runtime.resolve_abs_target(Path::new("/usr/local/bin")),
+    ] {
+        if !bin_dir.is_dir() {
+            continue;
+        }
+        for entry in fs::read_dir(&bin_dir)? {
+            let path = entry?.path();
+            let display = if bin_dir.starts_with(&runtime.root_dir) {
+                PathBuf::from("/").join(path.strip_prefix(&runtime.root_dir)?)
+            } else {
+                path.clone()
+            };
+            if path.is_file()
+                && !declared_downloads.contains(&display)
+                && !managed_files.contains(&display)
+                && !crate::commands::lib::matches_any_glob(&display, &plan.ignored_files)
+            {
+                unclaimed.push(display.to_string_lossy().into_owned());
+            }
+        }
+    }
+    Ok(unclaimed)
+}
+
+fn structured_downloads(runtime: &Runtime, plan: &crate::types::Plan) -> Result<serde_json::Value> {
+    let declared: Vec<_> = plan
+        .downloads
+        .iter()
+        .map(|download| {
+            serde_json::json!({
+                "url": download.url_or_zip_url(),
+                "path": download.display_path.display().to_string(),
+                "installed": download.install_path.exists(),
+            })
+        })
+        .collect();
+    Ok(serde_json::json!({
+        "declared": declared,
+        "unclaimed": unclaimed_binaries(runtime, plan)?,
+    }))
+}
+
+fn structured_services(plan: &crate::types::Plan) -> serde_json::Value {
+    let mut declared = Vec::new();
+    let mut unclaimed = Vec::new();
+    let mut errors = Vec::new();
+    for scope in ["user", "system"] {
+        let units = plan.services.get(scope).cloned().unwrap_or_default();
+        for unit in &units {
+            declared.push(serde_json::json!({"scope": scope, "unit": unit}));
+        }
+        let args: &[&str] = if scope == "user" {
+            &[
+                "systemctl",
+                "--user",
+                "list-unit-files",
+                "--state=enabled",
+                "--plain",
+            ]
+        } else {
+            &["systemctl", "list-unit-files", "--state=enabled", "--plain"]
+        };
+        match crate::utils::command_lines(args) {
+            Ok(lines) => {
+                for line in lines {
+                    let mut parts = line.split_whitespace();
+                    let Some(unit) = parts.next() else { continue };
+                    let Some("enabled") = parts.next() else {
+                        continue;
+                    };
+                    if !units.contains(unit) && !plan.ignored_services.contains(unit) {
+                        unclaimed.push(serde_json::json!({"scope": scope, "unit": unit}));
+                    }
+                }
+            }
+            Err(error) => errors.push(format!("{scope}: {error}")),
+        }
+    }
+    serde_json::json!({
+        "declared": declared,
+        "unclaimed_enabled": unclaimed,
+        "errors": errors,
+    })
+}
+
+fn structured_report(
+    runtime: &Runtime,
+    plan: &crate::types::Plan,
+    filter: Option<&str>,
+) -> Result<serde_json::Map<String, serde_json::Value>> {
+    let mut output = serde_json::Map::new();
+    if filter.is_none_or(|value| value == "native") {
+        output.insert("native_packages".into(), structured_native(plan));
+    }
+    if filter.is_none_or(|value| value == "flatpak") {
+        output.insert("flatpaks".into(), structured_flatpaks(plan));
+    }
+    if filter.is_none_or(|value| value == "downloads") {
+        output.insert("downloads".into(), structured_downloads(runtime, plan)?);
+    }
+    if filter.is_none_or(|value| value == "services") {
+        output.insert("services".into(), structured_services(plan));
+    }
+    Ok(output)
+}
+
 pub fn run(runtime: &Runtime, filter: Option<&str>, format: &OutputFormat) -> Result<()> {
     let plan = build_plan(runtime, None)?;
-
     if !matches!(format, OutputFormat::Human) {
-        let mut output = serde_json::Map::new();
-        if filter.is_none_or(|value| value == "native") {
-            let mut declared = Vec::new();
-            let mut unclaimed = Vec::new();
-            let mut errors = Vec::new();
-            for (distro, packages) in &plan.packages {
-                for package in packages {
-                    declared.push(serde_json::json!({"manager": distro, "name": package}));
-                }
-                match installed_native_packages(distro) {
-                    Ok(installed) => {
-                        for package in installed.difference(packages) {
-                            if !plan.ignored_packages.contains(package) {
-                                unclaimed
-                                    .push(serde_json::json!({"manager": distro, "name": package}));
-                            }
-                        }
-                    }
-                    Err(error) => errors.push(format!("{distro}: {error}")),
-                }
-            }
-            output.insert(
-                "native_packages".into(),
-                serde_json::json!({
-                    "declared": declared,
-                    "unclaimed": unclaimed,
-                    "errors": errors,
-                }),
-            );
-        }
-        if filter.is_none_or(|value| value == "flatpak") {
-            let installed = installed_flatpaks();
-            let (unclaimed, error) = match installed {
-                Ok(installed) => (
-                    installed
-                        .difference(&plan.flatpaks)
-                        .filter(|package| !plan.ignored_packages.contains(*package))
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                    String::new(),
-                ),
-                Err(error) => (Vec::new(), error.to_string()),
-            };
-            output.insert(
-                "flatpaks".into(),
-                serde_json::json!({
-                    "declared": plan.flatpaks,
-                    "unclaimed": unclaimed,
-                    "error": error,
-                }),
-            );
-        }
-        if filter.is_none_or(|value| value == "downloads") {
-            let declared: Vec<_> = plan
-                .downloads
-                .iter()
-                .map(|download| {
-                    serde_json::json!({
-                        "url": download.url_or_zip_url(),
-                        "path": download.display_path.display().to_string(),
-                        "installed": download.install_path.exists(),
-                    })
-                })
-                .collect();
-            let declared_downloads: BTreeSet<PathBuf> = plan
-                .downloads
-                .iter()
-                .map(|download| download.display_path.clone())
-                .collect();
-            let managed_files: BTreeSet<PathBuf> = plan
-                .files
-                .iter()
-                .map(|file| file.display_target.clone())
-                .collect();
-            let mut unclaimed = Vec::new();
-            for bin_dir in [
-                runtime.home_dir.join(".local/bin"),
-                runtime.resolve_abs_target(Path::new("/usr/local/bin")),
-            ] {
-                if !bin_dir.is_dir() {
-                    continue;
-                }
-                for entry in fs::read_dir(&bin_dir)? {
-                    let path = entry?.path();
-                    let display = if bin_dir.starts_with(&runtime.root_dir) {
-                        PathBuf::from("/").join(path.strip_prefix(&runtime.root_dir)?)
-                    } else {
-                        path.clone()
-                    };
-                    if path.is_file()
-                        && !declared_downloads.contains(&display)
-                        && !managed_files.contains(&display)
-                        && !crate::commands::lib::matches_any_glob(&display, &plan.ignored_files)
-                    {
-                        unclaimed.push(display.to_string_lossy().into_owned());
-                    }
-                }
-            }
-            output.insert(
-                "downloads".into(),
-                serde_json::json!({
-                    "declared": declared,
-                    "unclaimed": unclaimed,
-                }),
-            );
-        }
-        if filter.is_none_or(|value| value == "services") {
-            let mut declared = Vec::new();
-            let mut unclaimed = Vec::new();
-            let mut errors = Vec::new();
-            for scope in ["user", "system"] {
-                let units = plan.services.get(scope).cloned().unwrap_or_default();
-                for unit in &units {
-                    declared.push(serde_json::json!({"scope": scope, "unit": unit}));
-                }
-                let args: &[&str] = if scope == "user" {
-                    &[
-                        "systemctl",
-                        "--user",
-                        "list-unit-files",
-                        "--state=enabled",
-                        "--plain",
-                    ]
-                } else {
-                    &["systemctl", "list-unit-files", "--state=enabled", "--plain"]
-                };
-                match crate::utils::command_lines(args) {
-                    Ok(lines) => {
-                        for line in lines {
-                            let mut parts = line.split_whitespace();
-                            let Some(unit) = parts.next() else { continue };
-                            let Some("enabled") = parts.next() else {
-                                continue;
-                            };
-                            if !units.contains(unit) && !plan.ignored_services.contains(unit) {
-                                unclaimed.push(serde_json::json!({"scope": scope, "unit": unit}));
-                            }
-                        }
-                    }
-                    Err(error) => errors.push(format!("{scope}: {error}")),
-                }
-            }
-            output.insert(
-                "services".into(),
-                serde_json::json!({
-                    "declared": declared,
-                    "unclaimed_enabled": unclaimed,
-                    "errors": errors,
-                }),
-            );
-        }
-        return crate::utils::output::print_structured(format, &output);
+        let report = structured_report(runtime, &plan, filter)?;
+        return crate::utils::output::print_structured(format, &report);
     }
-
     print_native_packages_inventory(runtime, &plan, filter);
     print_flatpak_inventory(runtime, &plan, filter);
-
     println!();
     print_downloads_inventory(runtime, &plan, filter)?;
-
     print_services_inventory(runtime, &plan, filter);
-
     println!();
     println!(
         "{}",
