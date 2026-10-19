@@ -2,84 +2,89 @@
 
 A simple, templateless, multi-[device|repo|user|distro] dotfile manager that is highly shareable and tracks system packages & services.
 
----
+Dotted uses plain files and TOML configuration, with no templates. It also tracks packages, downloads, and systemd services. Dotted prints commands for those dependencies; you choose whether to run them.
 
-## Key Features
+## Install
 
-- **Decoupled Modular Artifacts**: Share modular dotfile components via independent repositories and artifacts (`[artifacts]/` or `repository/artifact`) rather than forcing a monolithic dotfiles repository.
-- **Hierarchical Overrides**: Merges multi-device and multi-user configurations hierarchically (`[device]/[user].toml` -> `laptop/user.toml`) with zero templating logic needed.
-- **Template-Free Variable Replacement**: Perform targeted string replacements (`[replace]` key-value mappings) directly on text dotfiles without complex template syntax.
-- **System Package and Download Tracking**: Track and declare dependencies across Arch Linux (`pacman`), Fedora (`dnf`), Ubuntu (`apt-get`), Flatpak, and web binary downloads (`curl`/`unzip`).
-- **Orphan & Unclaimed Resource Audits**: Inspect system drift and discover untracked installed packages or binaries via `dotted deploy orphans`.
-- **Safety First & Automatic Backups**: Existing target files modified during deployment are automatically backed up with Unix timestamps (`~/.cache/dotted/backups`). `dotted` never deletes files or runs unrequested uninstalls.
-- **Deny-by-Default Git Security**: The workspace enforces a strict `.gitignore` layout to prevent accidental commits of local settings, tokens, or machine-specific secrets.
-- **Rich Interactive CLI and Shell Completion**: Provides dynamic terminal completion generation for Bash, Zsh, and Fish, plus interactive TUI prompts for conflict resolution and file adoption.
+Dotted requires Rust and Cargo.
 
----
-
-## Directory Structure
-
-All configurations and cloned artifact repositories are stored under:
-`~/.local/share/dotted/` (known as the **Dotted repository**).
-
-```text
-~/.local/share/dotted/            ← Dotted repository (a private Git remote is recommended)
-├── .gitignore
-├── [dotted].toml                 ← Configures repositories & global shell env path
-├── [artifacts]/                  ← Locally writable artifacts
-├── [settings]/
-│   ├── [device]/
-│   │   ├── [user].toml           ← Applies to every device and user
-│   │   └── user1.toml
-│   ├── laptop/
-│   │   ├── [user].toml           ← Specific device, applies to all users
-│   │   └── user1.toml            ← Specific device + user pair
-│   └── pc/
-│       └── [user].toml
-│
-├── remote-repo/                  ← Git clone declared by [[repo]]
-│   ├── [about].toml              ← Source of truth declaring all artifacts
-│   ├── shell-config/
-│   │   ├── [bin].toml            ← Optional; package dependencies & env vars
-│   │   └── home/
-│   │       ├── .bashrc           ← Files map relative to home/
-│   │       └── .config/
-│   └── system-config/
-│       └── etc/
-│           └── pacman.conf       ← Files map relative to root /
+```sh
+git clone <repository-url>
+cd dotted
+cargo install --path .
 ```
 
----
+Or build and run from the checkout:
 
-## Core Concepts & Architecture
+```sh
+cargo run -- --help
+```
 
-### 1. Artifacts & Repositories
+## Get started
 
-- **Artifact**: A self-contained bundle of dotfiles, environment variables, system packages, and download definitions.
-- **Local Artifacts (`/artifact_name`)**: Stored directly in `~/.local/share/dotted/[artifacts]/<name>`.
-- **Remote Artifacts (`repo_name/artifact_name`)**: Stored inside git sub-repositories under `~/.local/share/dotted/<repo_name>/<artifact_name>`.
-- **`[about].toml`**: Declares available artifacts and their metadata in a repository root.
+Initialize a workspace, then create an artifact and adopt files into it:
 
-### 2. Path Mapping Rules
+```sh
+dotted workspace init
+dotted artifact create shell
+dotted adopt file /shell ~/.bashrc ~/.config/starship.toml
+```
 
-Files inside an artifact map directly to target filesystem paths based on top-level directory names:
+Review the file changes before applying them:
 
-- `<artifact>/home/...` $\rightarrow$ `$HOME/...` (e.g. `home/.bashrc` $\rightarrow$ `~/.bashrc`)
-- `<artifact>/root/...` $\rightarrow$ `/root/...`
-- `<artifact>/<etc|usr|var|...>/...` $\rightarrow$ `/<etc|usr|var|...>/...` (e.g. `etc/pacman.conf` $\rightarrow$ `/etc/pacman.conf`)
+```sh
+dotted deploy status
+dotted deploy diff
+dotted deploy apply
+```
 
-### 3. Settings & Overrides Hierarchy
+`deploy apply` copies dotfiles and prints suggested commands for packages, downloads, and services. It does not install those dependencies or enable services.
 
-Layered TOML configuration files under `[settings]/` merge settings cumulatively:
+## How it works
 
-1. `[settings]/[device]/[user].toml` (Global default for all devices and users)
-2. `[settings]/[device]/<current_user>.toml` (All devices for specific user)
-3. `[settings]/<current_device>/[user].toml` (Specific device for all users)
-4. `[settings]/<current_device>/<current_user>.toml` (Specific device and user pair)
+A workspace lives at `~/.local/share/dotted` by default. It contains workspace settings and local artifacts. It can also contain cloned repositories of shared artifacts.
 
-### 4. Package & Binary Manifests (`[bin].toml`)
+An artifact groups files and optional dependency declarations. Top-level folders map to system paths:
 
-Artifacts can optionally include a `[bin].toml` declaring dependencies and environment variables:
+| Artifact path | Target |
+| --- | --- |
+| `home/.bashrc` | `~/.bashrc` |
+| `root/.config/tool/config` | `/root/.config/tool/config` |
+| `etc/example.conf` | `/etc/example.conf` |
+
+The workspace applies settings in this order, from general to specific:
+
+1. `settings/[device]/[user].toml`
+2. `settings/[device]/<user>.toml`
+3. `settings/<device>/[user].toml`
+4. `settings/<device>/<user>.toml`
+
+Later settings override earlier ones. Dotted detects the device, user, and supported distribution, or accepts overrides with `--device`, `--user`, and `--distro`.
+
+## Workspace layout
+
+```text
+~/.local/share/dotted/
+├── [dotted].toml
+├── settings/
+│   ├── [device]/
+│   │   ├── [user].toml
+│   │   └── <user>.toml
+│   └── <device>/
+│       ├── [user].toml
+│       └── <user>.toml
+├── artifacts/
+│   └── <local-artifact>/
+└── <repo>/
+    ├── [about].toml
+    └── <artifact>/
+        ├── [bin].toml
+        └── home/
+```
+
+`[device]` and `[user]` are literal fallback names. Replace `<device>`, `<user>`, `<repo>`, and `<local-artifact>` with actual names. Repository metadata in `[about].toml` declares its artifacts. Each artifact may contain a `[bin].toml` manifest for environment variables and dependencies. The workspace config is `[dotted].toml`.
+
+For example:
 
 ```toml
 [env]
@@ -88,282 +93,43 @@ EDITOR = "nvim"
 [distro.archlinux]
 packages = ["neovim", "starship"]
 
-[distro.fedora]
-packages = ["neovim-qt"]
-
 [flatpak]
-packages = ["com.visualstudio.code"]
+packages = ["org.example.App"]
 
 [services.user]
 units = ["syncthing.service"]
-
-[services.system]
-units = ["docker.service"]
-
-[download.x86_64]
-url = "https://github.com/fastfetch-cli/fastfetch/releases/download/2.30.0/fastfetch-linux-amd64.tar.gz"
-zip = "fastfetch-linux-amd64.tar.gz"
-path = "fastfetch"
-install = "local" # "local" (~/.local/bin) or "system" (/usr/local/bin)
-
-# Status & Output Color Configuration in [dotted].toml
-[color]
-success = "green"
-warning = "yellow"
-error = "red"
-info = "cyan"
-muted = "bright-black"
-installed = "blue"
-diff = "yellow"
-tracked = "bright-green"
-partial = "bright-cyan"
-untracked = "bright-yellow"
-ignored = "bright-black"
-masked = "bright-magenta"
 ```
 
----
+Package managers support Arch Linux, Fedora, Ubuntu, and Flatpak. Dotted can also track downloadable binaries and user or system systemd units.
 
-## Installation & Building
+## Commands
 
-This project requires Rust and Cargo. It uses `just` as a command runner.
+```text
+workspace init [git_url]     Create or clone a workspace
+workspace pull               Pull workspace repositories
+workspace push               Commit and push workspace changes
+workspace doctor [category]  Check workspace configuration
+workspace format             Format workspace TOML files
 
-1. **Clone the repository**:
+repo add|remove|list|about   Manage artifact repositories
+artifact list|show|create    Find and manage artifacts
+artifact enable|disable      Select artifacts for deployment
+adopt file|package|service   Add existing files or dependencies to an artifact
 
-   ```bash
-   git clone <repository-url>
-   cd dotted
-   ```
+deploy status                Preview pending changes (also: deploy plan)
+deploy diff                  Compare files with the system
+deploy apply                 Copy files and print dependency commands
+deploy orphans               Find untracked packages, downloads, or services
 
-2. **Build and Run**:
-
-   ```bash
-   cargo build --release
-   # Check the CLI options
-   cargo run --release -- --help
-   ```
-
-3. **Development Tasks (using `just`)**:
-   - List available commands: `just`
-   - Run tests & linters: `just validate`
-   - Run focused quality checks: `just quality`
-   - Run unit tests only: `just test-unit`
-   - Run CLI integration tests only: `just test-integration`
-
----
-
-## CLI Reference & Usage
-
-### 1. Workspace Commands
-
-Manage the Dotted repository and pull/push changes across machines.
-
-`artifact list`, `deploy status`, `deploy orphans`, `workspace doctor`, and
-`backup list` accept `--format human|json|toml|toon`. Human output is the default.
-Structured outputs are top-level objects with `schema_version = 1`.
-
-- **Initialize a workspace**:
-  ```bash
-  dotted workspace init [git_url]
-  ```
-  _If `git_url` is provided, clones it; otherwise initializes a local repository._
-- **Sync/Pull updates**:
-  ```bash
-  dotted workspace pull
-  ```
-- **Commit & Push modifications**:
-  ```bash
-  dotted workspace push
-  ```
-- **Open workspace in a new shell**:
-  ```bash
-  dotted workspace cd
-  ```
-- **Run system integrity checks**:
-  ```bash
-  dotted workspace doctor [config|repo|artifact|tool] [--format human|json|toml|toon]
-  ```
-- **Format all workspace TOML files**:
-  ```bash
-  dotted workspace format
-  ```
-
-### 2. Artifact Commands
-
-Manage the dotfile and package bundles.
-
-- **List discovered artifacts**:
-  ```bash
-  dotted artifact list [filter] [--format human|json|toml|toon]
-  ```
-  Shell completions use the hidden `--raw` and `--state` options.
-- **Show detailed information & status**:
-  ```bash
-  dotted artifact show <artifact_id>
-  ```
-- **Create a new artifact structure**:
-  ```bash
-  dotted artifact create <artifact_name>
-  ```
-- **Enable/Disable artifacts**:
-  ```bash
-  dotted artifact enable <artifact_ids...>
-  ```
-  ```bash
-  dotted artifact disable <artifact_ids...>
-  ```
-- **Uninstall artifact files & configuration**:
-  ```bash
-  dotted artifact uninstall <artifact_id> [-y]
-  ```
-
-### 3. Adopt Commands
-
-Incorporate existing system files and packages into your workspace.
-
-- **Adopt system file(s) or directory**:
-  ```bash
-  dotted adopt file <artifact_id> [paths...]
-  ```
-  _If paths are omitted, starts an interactive file browser to pick a file/directory. If a file already exists in the destination artifact, a diff is displayed with an interactive prompt to overwrite, keep, or abort._
-- **Adopt a system package**:
-  ```bash
-  dotted adopt package <artifact_id> [package_name] [--type archlinux|fedora|ubuntu|flatpak]
-  ```
-- **Adopt a systemd service unit**:
-  ```bash
-  dotted adopt service <artifact_id> [--scope user|system] <service_names...>
-  ```
-
-### 4. Deploy Commands
-
-Inspect and apply the planned configuration changes to the system.
-
-- **Show pending changes**:
-  ```bash
-  dotted deploy status [artifact_id] [--filter artifacts|files|env|packages|downloads|services] [--format human|json|toml|toon]
-  ```
-  `dotted deploy plan` is an alias. Package, download, and service entries are tracked and suggested commands are printed; Dotted does not run them.
-- **Show line-by-line diffs**:
-  ```bash
-  dotted deploy diff [artifact_id]
-  ```
-- **Apply files and print dependency commands**:
-  ```bash
-  dotted deploy apply [artifact_id] [-y]
-  ```
-- **Scan for unclaimed system packages or binaries**:
-  ```bash
-  dotted deploy orphans [--filter native|flatpak|downloads|services] [--format human|json|toml|toon]
-  ```
-
-### 5. Repository Commands
-
-Manage external artifact repositories configured in `[dotted].toml`.
-
-- **List configured repositories**:
-  ```bash
-  dotted repo list
-  ```
-- **Add a repository configuration and clone it**:
-  ```bash
-  dotted repo add <name> <git_url>
-  ```
-- **Remove a repository configuration**:
-  ```bash
-  dotted repo remove <name>
-  ```
-- **Show metadata of a repository**:
-  ```bash
-  dotted repo about <name>
-  ```
-
-### 6. Ignore Commands
-
-Manage globally ignored files, directories, system packages, and systemd services.
-
-- **Ignore files & directories**:
-  ```bash
-  dotted ignore file add [paths...]
-  dotted ignore file remove [paths...]
-  dotted ignore file list [--path <path>] [--depth <depth>] [--filter tracked|untracked|ignored|partial|masked]
-  dotted ignore file scan [--path <path>] [--filter tracked|untracked|ignored|partial|masked]
-  ```
-- **Ignore system packages**:
-  ```bash
-  dotted ignore package add [package_names...]
-  dotted ignore package remove [package_names...]
-  dotted ignore package list
-  ```
-- **Ignore systemd services**:
-  ```bash
-  dotted ignore service add [service_units...]
-  dotted ignore service remove [service_units...]
-  dotted ignore service list
-  ```
-
-### 7. Backup & Restore Commands
-
-- **List available backups**:
-  ```bash
-  dotted backup list [timestamp] [--filter <path>] [--format human|json|toml|toon]
-  ```
-- **Restore a backup version**:
-  ```bash
-  dotted backup restore <timestamp> [path]
-  ```
-
-### 8. Shell Integration
-
-- **Generate shell completions**:
-  ```bash
-  dotted shell completions <bash|zsh|fish|powershell|elvish>
-  ```
-- **Inject environment variables into your shell**:
-  ```bash
-  eval "$(dotted shell env [shell])"
-  ```
-
----
-
-## How to Get Started (Example Walkthrough)
-
-### Step 1: Initialize the Workspace
-
-On a new machine, initialize your Dotted repo directory:
-
-```bash
-dotted workspace init
+ignore file|package|service  Manage ignored system resources
+backup list                  List saved file backups
+backup restore               Restore a backup
+shell env                    Print shell environment setup
+shell completions            Generate shell completions
 ```
 
-This sets up the required directory structure and configuration under `~/.local/share/dotted/`.
+Run `dotted --help` or `dotted <command> --help` for arguments and options. Commands that list data support `--format human|json|toml|toon` where documented by `--help`; human output is the default. Structured output includes `schema_version`.
 
-### Step 2: Adopt a Dotfile
+## Development
 
-Adopt your current shell configurations into a new artifact named `shell`:
-
-```bash
-dotted artifact create shell
-dotted adopt file /shell ~/.bashrc
-dotted adopt file /shell ~/.config/starship.toml
-```
-
-### Step 3: Register Package Dependencies
-
-Ensure your favorite terminal prompt is registered to install:
-
-```bash
-dotted adopt package /shell starship --type archlinux
-```
-
-### Step 4: Review and Deploy
-
-Check if your deployment plan has any differences or unapplied changes, then deploy them:
-
-```bash
-dotted deploy status
-dotted deploy diff
-dotted deploy apply
-```
-
-This copies files to their proper locations, downloads and installs missing packages, and prepares your system environment.
+Use `just` to list project tasks. `just check` runs formatting and lint checks. `just validate` runs the full validation task.
