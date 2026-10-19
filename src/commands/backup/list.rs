@@ -1,12 +1,12 @@
 /// CLI Command: `backup list [timestamp] [--filter <path>]`
 ///
 /// What it does:
-/// Lists all available backups (by timestamp) or lists files stored inside a specific backup.
+/// Lists all available backups (by timestamp) or paths stored inside a specific backup.
 ///
 /// Variations:
 /// 1. `timestamp` not provided: Lists all backup directory timestamps along with their parsed local date/time and relative age (e.g., "5m ago").
-/// 2. `timestamp` provided: Lists all files backed up in that specific backup version.
-/// 3. `--filter <path>` / `-f` provided (when `timestamp` is also provided): Filters the list of backed up files to only show those containing the filter path.
+/// 2. `timestamp` provided: Lists all paths backed up in that specific version.
+/// 3. `--filter <path>` / `-f` provided (when `timestamp` is also provided): Filters the listed paths to those containing the filter path.
 ///
 /// Decisions & Logic Branches:
 /// - If a `timestamp` is specified, checks if the backup folder exists; if not, fails with an error.
@@ -26,10 +26,10 @@ pub fn run(runtime: &Runtime, timestamp: Option<&str>, filter: Option<&Path>) ->
         if !root.exists() {
             bail!("backup timestamp not found: {ts}");
         }
-        println!("Files in backup {ts}:");
+        println!("Paths in backup {ts}:");
         for entry in WalkDir::new(&root).sort_by(crate::utils::cmp_walkdir_entries) {
             let entry = entry?;
-            if !entry.file_type().is_file() {
+            if !entry.file_type().is_file() && !entry.file_type().is_symlink() {
                 continue;
             }
             let relative = entry.path().strip_prefix(&root)?;

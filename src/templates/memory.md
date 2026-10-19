@@ -1,6 +1,6 @@
 # Dotted AI Assistant Memory File
 
-This file records user preferences and custom workspace conventions updated during interactions.
+Record durable preferences and workspace conventions only when the user asks you to remember them. Never store secrets.
 
 ## User Preferences
 

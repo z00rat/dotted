@@ -148,8 +148,8 @@ fn run_with_cli(cli: Cli) -> Result<()> {
             },
         },
         Commands::Backup(sub) => match sub {
-            BackupCommands::List { filter } => {
-                commands::backup::list::run(&runtime, None, filter.as_deref())
+            BackupCommands::List { timestamp, filter } => {
+                commands::backup::list::run(&runtime, timestamp.as_deref(), filter.as_deref())
             }
             BackupCommands::Restore { timestamp, path } => {
                 commands::backup::restore::run(&runtime, &timestamp, path.as_deref())

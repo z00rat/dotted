@@ -340,7 +340,14 @@ pub(crate) enum IgnoreServiceCommands {
 pub(crate) enum BackupCommands {
     #[command(about = "List backup snapshots")]
     List {
-        #[arg(short, long, help = "Optional path filter")]
+        #[arg(help = "Optional snapshot timestamp; list its backed-up paths")]
+        timestamp: Option<String>,
+        #[arg(
+            short,
+            long,
+            requires = "timestamp",
+            help = "Filter paths in the selected snapshot"
+        )]
         filter: Option<PathBuf>,
     },
     #[command(about = "Restore files from a backup snapshot")]

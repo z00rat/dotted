@@ -1,263 +1,95 @@
-# Dotted AI Assistant Guide
+# Dotted workspace guide
 
-This document contains procedural rules for AI agents that manage a **Dotted** workspace.
+Use this guide when editing a Dotted workspace. Use `dotted --help` and each
+command's `--help` for current command syntax.
 
----
+## Before changing the workspace
 
-## 1. Safety Rules
+- Read `memory.md` when it contains preferences relevant to the task. Add a
+  preference there only when the user asks you to remember it. Never store
+  secrets there.
+- Inspect the relevant settings, artifact manifest, and payload files before
+  editing them.
+- Run `dotted deploy status` and `dotted deploy diff` to inspect planned file
+  changes.
+- Ask before running `dotted deploy apply`. It writes files to the user's home
+  or system paths.
+- `dotted deploy apply` does not install packages, download binaries, or enable
+  services. It reports the commands or links for those actions. Show them to
+  the user; do not run them.
+- `dotted artifact uninstall` can remove deployed files and paths listed in an
+  artifact's `[config].remove`. Inspect those paths and get approval first.
+- `dotted workspace format` formats control TOML and rewrites `AGENTS.md` from
+  the installed template. Check its effects before using it in a customized
+  workspace.
+- `dotted workspace doctor` can repair ownership when run as root. Do not run
+  it with elevated permissions unless the user requests that repair.
 
-1. **NO UNSANCTIONED SYSTEM MODIFICATIONS**:
-   - The AI MUST NOT execute commands that modify the target system state (e.g. `dotted deploy apply`).
-   - The AI MUST request user execution for system changes.
-   - The AI MAY run read-only commands (`dotted deploy status`, `dotted deploy diff`, `dotted workspace doctor`).
+## Workspace model
 
-2. **FILE DELETION SAFETY**:
-   - The AI MUST NOT run `rm` or `rm -rf`.
-   - The AI MUST use `trash` to remove files or directories.
+- A local artifact ID starts with `/`, such as `/shell`.
+- A repository artifact ID is `<repo>/<artifact>`, such as `community/shell`.
+- An artifact's `[about].toml` entry declares its name, revision `r`, and
+  description. Its `[bin].toml` manifest is optional.
+- In an artifact, `home/` maps under the configured home directory, `root/`
+  maps under `/root`, and any other top-level directory maps under `/`.
+- `[local].toml` can set the current device name. The command-line options
+  `--device` and `--user` override the detected values.
 
----
+Settings load in this order:
 
-## 2. Directory Layout
+1. `[settings]/[device]/[user].toml`
+2. `[settings]/[device]/<user>.toml`
+3. `[settings]/<device>/[user].toml`
+4. `[settings]/<device>/<user>.toml`
 
-All workspace files live in the Dotted directory: `~/.local/share/dotted/`.
+The `enable`, `disable`, and `ignore` lists accumulate across these files. If
+an artifact appears in both `enable` and `disable`, it stays disabled. Later
+`replace` and `env` values replace earlier values with the same key.
 
-```text
-~/.local/share/dotted/
-├── AGENTS.md                     ← Global agent instructions and rules
-├── memory.md                     ← Machine and user memory state
-├── [dotted].toml                 ← Global control file
-├── [local].toml                  ← Machine override file (Git ignores this file)
-├── [artifacts]/                  ← Local artifacts directory
-│   └── <artifact>/
-│       ├── [bin].toml            ← Artifact manifest file
-│       └── home/                 ← Payload files relative to $HOME
-├── [settings]/                   ← Layered settings overrides
-│   ├── [device]/
-│   │   ├── [user].toml           ← Layer 1: All devices, all users
-│   │   └── <user>.toml           ← Layer 2: All devices, specific user
-│   └── <device>/
-│       ├── [user].toml           ← Layer 3: Specific device, all users
-│       └── <user>.toml           ← Layer 4: Specific device and user
-└── <repo>/                       ← Remote Git repository clone
-    ├── [about].toml              ← Repository manifest
-    └── <artifact>/
-        ├── [bin].toml            ← Artifact manifest file
-        ├── home/                 ← Maps to $HOME
-        └── root/                 ← Maps to /
-```
+## Artifact manifest fields
 
----
-
-## 3. File Types & Schemas
-
-### 3.1 `[dotted].toml` (Global Control File)
-
-- **Location**: `~/.local/share/dotted/[dotted].toml`
+`[bin].toml` can declare environment values, packages, services, downloads,
+and ignore rules. Keep system-specific packages under their distro table.
 
 ```toml
-[config]
-v = "0.1.0"
-env_path = ["~/.config/dotted/env.sh"]
-archlinux = "sudo pacman -S --needed --noconfirm"
-fedora = "sudo dnf install -y"
-ubuntu = "sudo apt-get install -y"
-
-[[repo]]
-name = "community"
-url = "https://github.com/example/dotted-community.git"
-branch = "main"
-tag = "v1.0.0"
-revision = "a1b2c3d"
-
-[color]
-success = "green"
-warning = "yellow"
-error = "red"
-info = "cyan"
-muted = "bright-black"
-installed = "blue"
-diff = "yellow"
-tracked = "bright-green"
-partial = "bright-cyan"
-untracked = "bright-yellow"
-ignored = "bright-black"
-masked = "bright-magenta"
-```
-
-### 3.2 `[local].toml` (Local Device Override File)
-
-- **Location**: `~/.local/share/dotted/[local].toml`
-
-```toml
-device = "laptop-nitro"
-```
-
-### 3.3 `[about].toml` (Repository Manifest)
-
-- **Location**: `<repo>/[about].toml` or `~/.local/share/dotted/[about].toml`
-
-```toml
-[about.shell]
-r = 1
-description = "Shell configuration"
-
-[maintainer]
-name = "User"
-email = "user@example.com"
-```
-
-### 3.4 Settings Files (`[settings]/**/*.toml`)
-
-- **Location**: `~/.local/share/dotted/[settings]/<device>/<user>.toml`
-- **Merging Hierarchy** (Later layer overrides earlier layer):
-  1. `[settings]/[device]/[user].toml`
-  2. `[settings]/[device]/<user>.toml`
-  3. `[settings]/<device>/[user].toml`
-  4. `[settings]/<device>/<user>.toml`
-
-```toml
-[artifacts]
-enable = ["/shell", "community/desktop"]
-disable = ["/legacy"]
-
-[ignore]
-folder = ["~/.cache", "~/download", "/tmp/"]
-file = ["~/.bash_history"]
-package = ["vim"]
-service = ["bluetooth.service"]
-
-[replace]
-"__FONT_SIZE__" = "12"
-
 [env]
 EDITOR = "nvim"
-```
-
-### 3.5 `[bin].toml` (Artifact Manifest)
-
-- **Location**: `<artifact>/[bin].toml`
-
-```toml
-[env]
-STARSHIP_CONFIG = "~/.config/starship.toml"
 
 [distro.archlinux]
-packages = ["starship", "zsh"]
-
-[distro.fedora]
-packages = ["starship"]
+packages = ["neovim"]
 
 [flatpak]
-packages = ["com.visualstudio.code"]
+packages = ["org.example.App"]
 
 [services.user]
 units = ["syncthing.service"]
 
-[services.system]
-units = ["docker.service"]
-
 [download.x86_64]
-url = "https://example.com/tool.tar.gz"
-zip = "tool.tar.gz"
+url = "https://example.org/tool"
 path = "tool"
-hash = "sha256:..."
-install = "local" # Allowed: "local" (~/.local/bin) or "system" (/usr/local/bin)
-
-[ignore]
-folder = ["~/.cache"]
-file = ["temp.log"]
-package = ["bash"]
-service = ["systemd.service"]
-
-[config]
-remove = ["old-binary"]
+install = "local"
 ```
 
-### 3.6 Target Payload Mapping
+For an archive download, use `zip` instead of `url` and set `path` to the
+archive entry to extract. Set `install` to `local` or `system`. Dotted records
+these downloads but does not fetch them or verify the optional `hash` field.
 
-- `<artifact>/home/...` $\rightarrow$ `$HOME/...`
-- `<artifact>/root/...` $\rightarrow$ `/root/...`
-- `<artifact>/<dir>/...` $\rightarrow$ `/<dir>/...`
+`[config].remove` lists paths that `artifact uninstall` removes recursively.
+Treat each listed path as destructive input and review it before uninstalling.
 
-### 3.7 `.gitignore` File
+Package and service entries describe desired state. Dotted checks installed
+packages and service state, then prints suggested commands for missing items.
+It does not run package managers, download commands, or `systemctl` changes.
 
-- **Location**: `~/.local/share/dotted/.gitignore`
+## Useful checks
 
-```gitignore
-*
-![dotted].toml
-![settings]/
-![settings]/**
-![artifacts]/
-![artifacts]/**
-!AGENTS.md
-!memory.md
-!.gitignore
-```
+- `dotted artifact list` shows discovered artifacts.
+- `dotted artifact show <id>` shows one artifact's contents and manifest.
+- `dotted deploy status [id]` shows planned state.
+- `dotted deploy diff [id]` shows file differences.
+- `dotted deploy orphans` reports unclaimed packages, binaries, and services.
+- `dotted workspace doctor` checks workspace configuration and required tools.
 
----
-
-## 4. Artifact Identifier Syntax
-
-- **Local Artifact**: Starts with `/` (e.g. `/shell`).
-- **Remote Artifact**: Uses `<repo>/<artifact>` (e.g. `community/zsh`).
-
----
-
-## 5. Arch Linux Discovery Commands
-
-Execute these commands to audit system state and report untracked items to the user:
-
-1. **Find Unmanaged `/etc` Files**:
-
-   ```bash
-   sudo lostfiles | grep "/etc"
-   ```
-
-2. **List Explicit Packages**:
-
-   ```bash
-   pacman -Qeq | expac -Q "%-30n %d" -
-   ```
-
-3. **List Modified `/etc` Package Files**:
-
-   ```bash
-   pacman -Qii | awk '/^Backup Files/ {in_bf=1} /^[A-Z][a-zA-Z0-9 ]*:/ && !/^Backup Files/ {in_bf=0} in_bf && /\/etc\// && /\[modified\]/ {for(i=1;i<=NF;i++) if($i ~ /^\/etc\//) print $i}' | sort
-   ```
-
-4. **List Flatpak Packages**:
-
-   ```bash
-   flatpak list --app --columns=name,application,description
-   ```
-
-5. **List System Services**:
-
-   ```bash
-   systemctl list-units --type=service --no-legend --no-pager | awk '{name=$1; $1=$2=$3=$4=""; sub(/^ +/, ""); print name "\t" $0}'
-   ```
-
-6. **List User Services**:
-
-   ```bash
-   systemctl --user list-units --type=service --no-legend --no-pager | awk '{name=$1; $1=$2=$3=$4=""; sub(/^ +/, ""); print name "\t" $0}'
-   ```
-
----
-
-## 6. Memory Protocol (`memory.md`)
-
-1. Read `memory.md` at the start of a session.
-2. Write user-specific preferences to `memory.md`.
-
----
-
-## 7. Execution Checklist for AI
-
-1. Read `memory.md`.
-2. Use `dotted deploy status` to check changes.
-3. Do NOT run `dotted deploy apply`. Request user execution.
-4. Use `trash` for file deletions. Do NOT use `rm`.
-5. Place user dotfiles in `<artifact>/home/`.
-6. **Settings Modifications**: Add global overrides to `[settings]/[device]/[user].toml`. Put machine-specific changes in `[settings]/<device>/<user>.toml`.
+Before finishing, report the files changed, checks run, and any suggested
+package, download, or service commands for the user to review.
