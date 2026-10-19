@@ -20,7 +20,7 @@ pub struct Cli {
     pub(crate) device: Option<String>,
     #[arg(long, global = true, help = "Override resolved user")]
     pub(crate) user: Option<String>,
-    #[arg(long, global = true, value_parser = ["archlinux", "fedora", "ubuntu"], help = "Override detected Linux distribution")]
+    #[arg(long, global = true, help = "Override detected Linux distribution")]
     pub(crate) distro: Option<Distro>,
     #[arg(long, global = true, help = "Disable colored output")]
     pub(crate) no_color: bool,

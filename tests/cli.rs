@@ -4,6 +4,7 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command as ProcessCommand;
 use tempfile::TempDir;
 
 struct Fixture {
@@ -93,6 +94,20 @@ fn copy_dir(source: &Path, destination: &Path) {
     }
 }
 
+fn git(directory: &Path, args: &[&str]) -> String {
+    let output = ProcessCommand::new("git")
+        .current_dir(directory)
+        .args(args)
+        .output()
+        .expect("run git");
+    assert!(
+        output.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
 #[test]
 fn deploy_status_displays_example_settings_and_artifacts() {
     let fixture = Fixture::new();
@@ -113,6 +128,58 @@ fn deploy_status_displays_example_settings_and_artifacts() {
         .assert()
         .success()
         .stdout(predicate::str::contains("services:"));
+}
+
+#[test]
+fn structured_commands_emit_valid_versioned_output() {
+    let fixture = Fixture::new();
+    let commands: &[&[&str]] = &[
+        &["artifact", "list"],
+        &["workspace", "doctor"],
+        &["deploy", "status"],
+        &["deploy", "orphans"],
+        &["backup", "list"],
+    ];
+
+    for command in commands {
+        for format in ["json", "toml", "toon"] {
+            let output = fixture
+                .cmd()
+                .args(*command)
+                .args(["--format", format])
+                .assert()
+                .success()
+                .get_output()
+                .stdout
+                .clone();
+
+            match format {
+                "json" => {
+                    let value: serde_json::Value =
+                        serde_json::from_slice(&output).expect("valid JSON output");
+                    assert_eq!(value["schema_version"], 1, "command: {command:?}");
+                }
+                "toml" => {
+                    let value: toml::Value = toml::from_slice(&output).expect("valid TOML output");
+                    assert_eq!(
+                        value
+                            .get("schema_version")
+                            .and_then(toml::Value::as_integer),
+                        Some(1),
+                        "command: {command:?}"
+                    );
+                }
+                "toon" => {
+                    let text = String::from_utf8(output).expect("TOON output is UTF-8");
+                    assert!(
+                        text.contains("schema_version"),
+                        "missing schema version for {command:?}: {text}"
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
 }
 
 #[test]
@@ -197,6 +264,59 @@ fn deploy_apply_writes_files_and_expands_replacements() {
     assert!(fixture.root.join("etc/config.conf").exists());
     assert!(fixture.home.join(".config/nvim/init.lua").exists());
     assert!(fixture.home.join(".config/dotted/env.sh").exists());
+}
+
+#[test]
+fn deploy_apply_prints_dependency_commands_without_running_them() {
+    let fixture = Fixture::new();
+    let command_log = fixture
+        .meta
+        .parent()
+        .expect("fixture temp directory")
+        .join("external-commands.log");
+    let recorder = "#!/usr/bin/env sh\nprintf '%s %s\\n' \"${0##*/}\" \"$*\" >> \"$DOTTED_TEST_COMMAND_LOG\"\ncase \"$*\" in\n  \"-Qq \"*|\"info \"*) exit 1 ;;\nesac\nexit 0\n";
+    for tool in [
+        "pacman",
+        "dnf",
+        "apt-get",
+        "flatpak",
+        "systemctl",
+        "curl",
+        "unzip",
+    ] {
+        write_executable(fixture.bin.join(tool), recorder);
+    }
+
+    let output = fixture
+        .cmd()
+        .env("DOTTED_TEST_COMMAND_LOG", &command_log)
+        .args(["--distro", "archlinux", "deploy", "apply", "--yes"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let output = String::from_utf8(output).expect("CLI output is UTF-8");
+    assert!(output.contains("native packages (archlinux): sudo pacman -S"));
+    assert!(output.contains("flatpaks: flatpak install -y"));
+    assert!(output.contains("download: curl --fail --location"));
+
+    let calls = fs::read_to_string(command_log).expect("recorded dependency checks");
+    for install_command in [
+        "pacman -S",
+        "dnf install",
+        "apt-get install",
+        "flatpak install",
+        "systemctl --user enable",
+        "systemctl enable --now",
+        "curl --fail",
+        "unzip",
+    ] {
+        assert!(
+            !calls.contains(install_command),
+            "deploy apply ran {install_command}: {calls}"
+        );
+    }
 }
 
 #[test]
@@ -556,6 +676,31 @@ fn repo_list_about_and_remove_manage_configuration() {
 }
 
 #[test]
+fn repo_add_clones_and_records_a_repository() {
+    let fixture = Fixture::new();
+    let temporary_root = fixture.meta.parent().expect("fixture temp directory");
+    let remote = temporary_root.join("added.git");
+    fs::create_dir_all(&remote).expect("remote directory");
+    git(&remote, &["init", "--bare"]);
+
+    fixture
+        .cmd()
+        .args([
+            "repo",
+            "add",
+            "added",
+            remote.to_str().expect("remote path UTF-8"),
+        ])
+        .assert()
+        .success();
+
+    assert!(fixture.meta.join("added/.git").exists());
+    let config = fs::read_to_string(fixture.meta.join("[dotted].toml")).expect("workspace config");
+    assert!(config.contains("name = \"added\""));
+    assert!(config.contains(remote.to_str().expect("remote path UTF-8")));
+}
+
+#[test]
 fn backup_list_displays_created_backups() {
     let fixture = Fixture::new();
 
@@ -579,6 +724,51 @@ fn backup_list_displays_created_backups() {
 }
 
 #[test]
+fn backup_list_filters_paths_within_a_snapshot() {
+    let fixture = Fixture::new();
+    fixture
+        .cmd()
+        .args(["deploy", "apply", "--yes"])
+        .assert()
+        .success();
+
+    fs::write(
+        fixture.home.join(".config/git/config"),
+        "[user]\n  name = changed\n",
+    )
+    .expect("modify git config");
+    fs::write(fixture.home.join(".config/nvim/init.lua"), "-- changed\n")
+        .expect("modify nvim config");
+    fixture
+        .cmd()
+        .args(["deploy", "apply", "--yes"])
+        .assert()
+        .success();
+
+    let backup_root = fixture.home.join(".cache/dotted/backups");
+    let timestamp = fs::read_dir(backup_root)
+        .expect("backup directory")
+        .next()
+        .expect("backup snapshot")
+        .expect("snapshot entry")
+        .file_name()
+        .to_string_lossy()
+        .into_owned();
+    let output = fixture
+        .cmd()
+        .args(["backup", "list", &timestamp, "--filter", "git"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let output = String::from_utf8_lossy(&output);
+
+    assert!(output.contains("git/config"));
+    assert!(!output.contains("nvim/init.lua"));
+}
+
+#[test]
 fn artifact_create_scaffolds_directory_structure() {
     let fixture = Fixture::new();
 
@@ -590,6 +780,19 @@ fn artifact_create_scaffolds_directory_structure() {
         .stdout(predicate::str::contains("Created /zsh"));
 
     assert!(fixture.meta.join("[artifacts]/zsh/[bin].toml").exists());
+}
+
+#[test]
+fn artifact_show_displays_manifest_details() {
+    let fixture = Fixture::new();
+
+    fixture
+        .cmd()
+        .args(["artifact", "show", "repo2/neovim"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("repo2/neovim"))
+        .stdout(predicate::str::contains("neovim"));
 }
 
 #[test]
@@ -1077,6 +1280,68 @@ fn workspace_init_and_cd_manage_local_directory() {
 
     let fixture = Fixture::new();
     fixture.cmd().args(["workspace", "cd"]).assert().success();
+}
+
+#[test]
+fn workspace_pull_clones_configured_repository() {
+    let fixture = Fixture::new();
+    let temporary_root = fixture.meta.parent().expect("fixture temp directory");
+    let remote = temporary_root.join("remote.git");
+    fs::create_dir_all(&remote).expect("remote directory");
+    git(&remote, &["init", "--bare"]);
+
+    fs::remove_dir_all(fixture.meta.join("repo2")).expect("remove fixture repository");
+    let config_path = fixture.meta.join("[dotted].toml");
+    let mut config = fs::read_to_string(&config_path).expect("workspace config");
+    config = config.replace(
+        "https://example.invalid/repo2.git",
+        remote.to_str().expect("remote path UTF-8"),
+    );
+    fs::write(config_path, config).expect("configure local remote");
+
+    fixture.cmd().args(["workspace", "pull"]).assert().success();
+    assert!(fixture.meta.join("repo2/.git").exists());
+}
+
+#[test]
+fn workspace_push_commits_and_pushes_workspace_changes() {
+    let fixture = Fixture::new();
+    let temporary_root = fixture.meta.parent().expect("fixture temp directory");
+    let remote = temporary_root.join("workspace.git");
+    fs::create_dir_all(&remote).expect("remote directory");
+    git(&remote, &["init", "--bare"]);
+
+    git(&fixture.meta, &["init", "--initial-branch=master"]);
+    git(&fixture.meta, &["config", "user.name", "Dotted tests"]);
+    git(
+        &fixture.meta,
+        &["config", "user.email", "tests@example.com"],
+    );
+    git(&fixture.meta, &["config", "commit.gpgsign", "false"]);
+    git(
+        &fixture.meta,
+        &[
+            "remote",
+            "add",
+            "origin",
+            remote.to_str().expect("remote path UTF-8"),
+        ],
+    );
+    git(&fixture.meta, &["add", "."]);
+    git(&fixture.meta, &["commit", "-m", "initial"]);
+    git(
+        &fixture.meta,
+        &["push", "--set-upstream", "origin", "master"],
+    );
+    let config_path = fixture.meta.join("[dotted].toml");
+    let mut config = fs::read_to_string(&config_path).expect("workspace config");
+    config.push_str("\n# push test\n");
+    fs::write(config_path, config).expect("workspace change");
+
+    fixture.cmd().args(["workspace", "push"]).assert().success();
+
+    let pushed_config = git(&remote, &["show", "master:[dotted].toml"]);
+    assert!(pushed_config.contains("# push test"));
 }
 
 #[test]
