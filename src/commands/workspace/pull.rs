@@ -65,7 +65,7 @@ pub fn run(runtime: &Runtime) -> Result<()> {
     println!();
 
     if meta_git {
-        let _ = run_git(&runtime.dotted_dir, ["pull", "--ff-only"]);
+        run_git(&runtime.dotted_dir, ["pull", "--ff-only"])?;
     }
     for repo in configured_repos(&dotted) {
         let path = runtime.dotted_dir.join(&repo.name);

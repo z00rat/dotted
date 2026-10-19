@@ -49,16 +49,17 @@ pub(crate) fn command_lines(args: &[&str]) -> Result<std::collections::BTreeSet<
 pub(crate) fn native_package_command(
     distro: &str,
     missing: &std::collections::BTreeSet<String>,
-    _package_commands: &std::collections::HashMap<String, String>,
+    package_commands: &std::collections::HashMap<String, String>,
 ) -> Result<String> {
-    let pkgs = missing.iter().cloned().collect::<Vec<_>>().join(" ");
-    let cmd = match distro {
-        "archlinux" => format!("sudo pacman -S {pkgs}"),
-        "ubuntu" => format!("sudo apt install -y {pkgs}"),
-        "fedora" => format!("sudo dnf install -y {pkgs}"),
-        other => bail!("unsupported distro {other}"),
-    };
-    Ok(cmd)
+    let prefix = package_commands
+        .get(distro)
+        .ok_or_else(|| color_eyre::eyre::eyre!("unsupported distro {distro}"))?;
+    let packages = missing
+        .iter()
+        .map(|package| shell_escape::escape(package.into()).to_string())
+        .collect::<Vec<_>>()
+        .join(" ");
+    Ok(format!("{prefix} {packages}"))
 }
 
 pub(crate) fn is_package_installed(distro: &str, package: &str) -> bool {

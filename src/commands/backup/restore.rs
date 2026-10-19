@@ -32,7 +32,7 @@ pub fn run(runtime: &Runtime, timestamp: &str, path: Option<&Path>) -> Result<()
     } else {
         for entry in WalkDir::new(&root) {
             let entry = entry?;
-            if !entry.file_type().is_file() {
+            if !entry.file_type().is_file() && !entry.file_type().is_symlink() {
                 continue;
             }
             let relative = entry.path().strip_prefix(&root)?;

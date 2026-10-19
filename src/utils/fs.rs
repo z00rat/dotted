@@ -43,14 +43,47 @@ pub(crate) fn backup_file(
     display_target: &Path,
 ) -> Result<()> {
     let relative = display_target.strip_prefix("/").unwrap_or(display_target);
-    let backup = runtime
-        .backup_root()
-        .join(chrono::Utc::now().timestamp().to_string())
-        .join(relative);
-    if let Some(parent) = backup.parent() {
-        fs::create_dir_all(parent)?;
+    let stamp = chrono::Utc::now().timestamp().to_string();
+    let mut suffix = 0_u32;
+    let backup = loop {
+        let snapshot = if suffix == 0 {
+            stamp.clone()
+        } else {
+            format!("{stamp}-{suffix}")
+        };
+        let candidate = runtime.backup_root().join(snapshot).join(relative);
+        if !candidate.exists() && fs::symlink_metadata(&candidate).is_err() {
+            break candidate;
+        }
+        suffix += 1;
+    };
+    copy_path(target, &backup)
+}
+
+fn copy_path(source: &Path, destination: &Path) -> Result<()> {
+    let metadata = fs::symlink_metadata(source)?;
+    let file_type = metadata.file_type();
+    if file_type.is_symlink() {
+        let link = fs::read_link(source)?;
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(link, destination)?;
+        #[cfg(not(unix))]
+        fs::copy(source, destination)?;
+    } else if file_type.is_dir() {
+        fs::create_dir_all(destination)?;
+        for entry in fs::read_dir(source)? {
+            let entry = entry?;
+            copy_path(&entry.path(), &destination.join(entry.file_name()))?;
+        }
+    } else {
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(source, destination)?;
     }
-    fs::copy(target, backup)?;
     Ok(())
 }
 

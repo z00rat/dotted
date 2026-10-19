@@ -283,6 +283,15 @@ pub(crate) fn build_plan(runtime: &Runtime, only: Option<&str>) -> Result<Plan> 
     let artifacts = collect_enabled_artifacts(runtime, only)?;
     let files = build_planned_files(runtime, &artifacts, &settings)?;
     let (env, env_overrides) = collect_env(&artifacts, &settings);
+    for key in env.keys() {
+        let mut chars = key.chars();
+        let valid_start = chars
+            .next()
+            .is_some_and(|ch| ch == '_' || ch.is_ascii_alphabetic());
+        if !valid_start || !chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric()) {
+            bail!("invalid environment variable name {key:?}");
+        }
+    }
     let (packages, flatpaks, services, downloads) =
         build_packages_and_downloads(runtime, &artifacts)?;
     let (ignored_folders, ignored_files, ignored_packages, ignored_services) =

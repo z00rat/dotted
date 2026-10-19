@@ -370,7 +370,20 @@ pub(crate) fn restore_one(source: &Path, target: &Path) -> Result<()> {
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::copy(source, target)?;
+    if fs::symlink_metadata(source)?.file_type().is_symlink() {
+        let link = fs::read_link(source)?;
+        #[cfg(unix)]
+        {
+            if fs::symlink_metadata(target).is_ok() {
+                fs::remove_file(target)?;
+            }
+            std::os::unix::fs::symlink(link, target)?;
+        }
+        #[cfg(not(unix))]
+        fs::copy(source, target)?;
+    } else {
+        fs::copy(source, target)?;
+    }
     println!("Restored {}", target.display());
     Ok(())
 }

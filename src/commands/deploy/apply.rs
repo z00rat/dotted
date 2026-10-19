@@ -99,6 +99,7 @@ pub fn run(runtime: &Runtime, args: &crate::cli::ApplyArgs) -> Result<()> {
 
     if artifacts_to_apply.is_empty() {
         let external = apply_packages_and_downloads(runtime, &plan, args.yes)?;
+        write_env_file(runtime, &plan)?;
         if !external {
             println!("No changes to apply.");
         }
