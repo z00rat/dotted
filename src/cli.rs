@@ -236,7 +236,9 @@ pub(crate) enum DeployCommands {
         #[arg(help = "Show diff for a specific artifact only")]
         artifact: Option<String>,
     },
-    #[command(about = "Apply changes to system files and install dependencies")]
+    #[command(
+        about = "Apply file changes and print commands for packages, downloads, and services"
+    )]
     Apply(ApplyArgs),
     #[command(about = "List packages, downloads, and services not declared by active artifacts")]
     Orphans {
