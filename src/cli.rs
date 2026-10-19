@@ -181,7 +181,10 @@ pub(crate) enum ArtifactCommands {
         #[arg(help = "Name of the new artifact to scaffold")]
         artifact: String,
     },
-    #[command(about = "Enable one or more artifacts")]
+    #[command(
+        about = "Enable one or more artifacts",
+        after_help = "Examples:\n  dotted artifact enable personal/shell"
+    )]
     Enable {
         #[arg(help = "Artifact ID(s) (repository/artifact) to enable", num_args = 1..)]
         artifacts: Vec<String>,
@@ -202,14 +205,20 @@ pub(crate) enum ArtifactCommands {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum AdoptCommands {
-    #[command(about = "Adopt system files or directories into your personal repository")]
+    #[command(
+        about = "Adopt system files or directories into your personal repository",
+        after_help = "Examples:\n  dotted adopt file personal/shell ~/.bashrc\n  dotted adopt file personal/desktop ~/.config/kitty"
+    )]
     File {
         #[arg(help = "Artifact ID (repository/artifact) to adopt into")]
         artifact: String,
         #[arg(help = "Path(s) to the system file/directory to adopt", num_args = 1..)]
         paths: Vec<PathBuf>,
     },
-    #[command(about = "Adopt a package manager dependency")]
+    #[command(
+        about = "Adopt a package manager dependency",
+        after_help = "Examples:\n  dotted adopt package personal/terminal neovim --type archlinux\n  dotted adopt package personal/desktop org.example.App --type flatpak"
+    )]
     Package {
         #[arg(help = "Artifact ID (repository/artifact) to adopt package into")]
         artifact: String,
@@ -218,7 +227,10 @@ pub(crate) enum AdoptCommands {
         #[arg(long = "type", help = "Package type")]
         package_type: Option<PackageType>,
     },
-    #[command(about = "Adopt a systemd service unit")]
+    #[command(
+        about = "Adopt a systemd service unit",
+        after_help = "Examples:\n  dotted adopt service personal/sync --scope user syncthing.service\n  dotted adopt service personal/docker --scope system docker.service"
+    )]
     Service {
         #[arg(help = "Artifact ID (repository/artifact) to adopt service into")]
         artifact: String,
@@ -347,7 +359,10 @@ pub(crate) enum IgnoreServiceCommands {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum BackupCommands {
-    #[command(about = "List backup snapshots")]
+    #[command(
+        about = "List backup snapshots",
+        after_help = "Examples:\n  dotted backup list\n  dotted backup list 1760000000\n  dotted backup list 1760000000 --filter .config"
+    )]
     List {
         #[arg(help = "Optional snapshot timestamp; list its backed-up paths")]
         timestamp: Option<String>,
@@ -359,7 +374,10 @@ pub(crate) enum BackupCommands {
         )]
         filter: Option<PathBuf>,
     },
-    #[command(about = "Restore files from a backup snapshot")]
+    #[command(
+        about = "Restore files from a backup snapshot",
+        after_help = "Examples:\n  dotted backup restore 1760000000\n  dotted backup restore 1760000000 .config/kitty/kitty.conf"
+    )]
     Restore {
         #[arg(help = "Timestamp of the backup run to restore")]
         timestamp: String,
