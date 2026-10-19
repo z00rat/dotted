@@ -12,3 +12,7 @@
 .env
 .env.*
 !.env.example
+
+# cuckcoding
+.agents
+.audit
