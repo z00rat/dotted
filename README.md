@@ -158,6 +158,10 @@ This project requires Rust and Cargo. It uses `just` as a command runner.
 
 Manage the Dotted repository and pull/push changes across machines.
 
+`artifact list`, `deploy status`, `deploy orphans`, `workspace doctor`, and
+`backup list` accept `--format human|json|toml|toon`. Human output is the default.
+Structured outputs are top-level objects with `schema_version = 1`.
+
 - **Initialize a workspace**:
   ```bash
   dotted workspace init [git_url]
@@ -177,7 +181,7 @@ Manage the Dotted repository and pull/push changes across machines.
   ```
 - **Run system integrity checks**:
   ```bash
-  dotted workspace doctor [config|repo|artifact|tool]
+  dotted workspace doctor [config|repo|artifact|tool] [--format human|json|toml|toon]
   ```
 - **Format all workspace TOML files**:
   ```bash
@@ -190,8 +194,9 @@ Manage the dotfile and package bundles.
 
 - **List discovered artifacts**:
   ```bash
-  dotted artifact list [filter] [--raw] [--state enabled|disabled]
+  dotted artifact list [filter] [--format human|json|toml|toon]
   ```
+  Shell completions use the hidden `--raw` and `--state` options.
 - **Show detailed information & status**:
   ```bash
   dotted artifact show <artifact_id>
@@ -227,7 +232,7 @@ Incorporate existing system files and packages into your workspace.
   ```
 - **Adopt a systemd service unit**:
   ```bash
-  dotted adopt service <artifact_id> [user|system] <service_names...>
+  dotted adopt service <artifact_id> [--scope user|system] <service_names...>
   ```
 
 ### 4. Deploy Commands
@@ -236,19 +241,20 @@ Inspect and apply the planned configuration changes to the system.
 
 - **Show pending changes**:
   ```bash
-  dotted deploy status [artifact_id] [--filter artifacts|files|env|packages|downloads]
+  dotted deploy status [artifact_id] [--filter artifacts|files|env|packages|downloads|services] [--format human|json|toml|toon]
   ```
+  `dotted deploy plan` is an alias. Package, download, and service entries are tracked and suggested commands are printed; Dotted does not run them.
 - **Show line-by-line diffs**:
   ```bash
   dotted deploy diff [artifact_id]
   ```
-- **Apply configuration & install dependencies**:
+- **Apply files and print dependency commands**:
   ```bash
   dotted deploy apply [artifact_id] [-y]
   ```
 - **Scan for unclaimed system packages or binaries**:
   ```bash
-  dotted deploy orphans [--filter native|flatpak|downloads]
+  dotted deploy orphans [--filter native|flatpak|downloads|services] [--format human|json|toml|toon]
   ```
 
 ### 5. Repository Commands
@@ -300,7 +306,7 @@ Manage globally ignored files, directories, system packages, and systemd service
 
 - **List available backups**:
   ```bash
-  dotted backup list [timestamp] [--filter <path>]
+  dotted backup list [timestamp] [--filter <path>] [--format human|json|toml|toon]
   ```
 - **Restore a backup version**:
   ```bash

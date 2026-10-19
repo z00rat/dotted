@@ -17,15 +17,48 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+use crate::cli::OutputFormat;
 use crate::types::Runtime;
 use crate::utils::style;
 
-pub fn run(runtime: &Runtime, timestamp: Option<&str>, filter: Option<&Path>) -> Result<()> {
+pub fn run(
+    runtime: &Runtime,
+    timestamp: Option<&str>,
+    filter: Option<&Path>,
+    format: &OutputFormat,
+) -> Result<()> {
     if let Some(ts) = timestamp {
         let root = runtime.backup_root().join(ts);
         if !root.exists() {
             bail!("backup timestamp not found: {ts}");
         }
+        if !matches!(format, OutputFormat::Human) {
+            let mut paths = Vec::new();
+            for entry in WalkDir::new(&root).sort_by(crate::utils::cmp_walkdir_entries) {
+                let entry = entry?;
+                if !entry.file_type().is_file() && !entry.file_type().is_symlink() {
+                    continue;
+                }
+                let relative = entry.path().strip_prefix(&root)?;
+                let display = PathBuf::from("/")
+                    .join(relative)
+                    .to_string_lossy()
+                    .into_owned();
+                if filter.is_some_and(|filter_path| {
+                    !display
+                        .to_lowercase()
+                        .contains(&filter_path.to_string_lossy().to_lowercase())
+                }) {
+                    continue;
+                }
+                paths.push(display);
+            }
+            return crate::utils::output::print_structured(
+                format,
+                &serde_json::json!({"snapshot": ts, "paths": paths}),
+            );
+        }
+
         println!("Paths in backup {ts}:");
         for entry in WalkDir::new(&root).sort_by(crate::utils::cmp_walkdir_entries) {
             let entry = entry?;
@@ -46,13 +79,55 @@ pub fn run(runtime: &Runtime, timestamp: Option<&str>, filter: Option<&Path>) ->
         }
     } else {
         if !runtime.backup_root().exists() {
+            if !matches!(format, OutputFormat::Human) {
+                return crate::utils::output::print_structured(
+                    format,
+                    &serde_json::json!({"snapshots": []}),
+                );
+            }
             println!("No backups found.");
             return Ok(());
         }
         let mut entries = fs::read_dir(runtime.backup_root())?
-            .filter_map(Result::ok)
+            .filter_map(|entry| entry.ok())
             .collect::<Vec<_>>();
         entries.sort_by(crate::utils::cmp_dir_entries);
+        if !matches!(format, OutputFormat::Human) {
+            let snapshots = entries
+                .iter()
+                .map(|entry| {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    let parsed = name.parse::<i64>().ok();
+                    let created_at = parsed
+                        .and_then(|timestamp| chrono::DateTime::from_timestamp(timestamp, 0))
+                        .map(|date| {
+                            date.with_timezone(&chrono::Local)
+                                .format("%Y-%m-%d %H:%M:%S")
+                                .to_string()
+                        })
+                        .unwrap_or_default();
+                    let age = parsed
+                        .map(|timestamp| {
+                            let duration = chrono::Utc::now().timestamp() - timestamp;
+                            if duration < 60 {
+                                format!("{duration}s")
+                            } else if duration < 3600 {
+                                format!("{}m", duration / 60)
+                            } else if duration < 86400 {
+                                format!("{}h", duration / 3600)
+                            } else {
+                                format!("{}d", duration / 86400)
+                            }
+                        })
+                        .unwrap_or_default();
+                    serde_json::json!({"id": name, "created_at": created_at, "age": age})
+                })
+                .collect::<Vec<_>>();
+            return crate::utils::output::print_structured(
+                format,
+                &serde_json::json!({"snapshots": snapshots}),
+            );
+        }
         for entry in entries {
             let name = entry.file_name().to_string_lossy().to_string();
             if let Ok(ts_val) = name.parse::<i64>() {

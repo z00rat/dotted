@@ -16,6 +16,8 @@
 /// - Prints the status of environment variables, packages, flatpaks, and downloads matching the filter.
 use color_eyre::eyre::Result;
 
+use crate::cli::OutputFormat;
+
 use crate::commands::deploy::files::{self, FileChange};
 use crate::commands::lib::print_plan_extras;
 use crate::plan::build_plan;
@@ -170,10 +172,147 @@ fn print_artifacts_section(
     Ok(())
 }
 
-pub fn run(runtime: &Runtime, artifact: Option<&str>, filter: Option<&str>) -> Result<()> {
+pub fn run(
+    runtime: &Runtime,
+    artifact: Option<&str>,
+    filter: Option<&str>,
+    format: &OutputFormat,
+) -> Result<()> {
     let plan = build_plan(runtime, artifact)?;
 
     let show = |section: &str| filter.is_none_or(|f| f == section);
+
+    if !matches!(format, OutputFormat::Human) {
+        let mut output = serde_json::Map::new();
+        output.insert("device".into(), serde_json::json!(runtime.device));
+        output.insert("user".into(), serde_json::json!(runtime.user));
+        output.insert(
+            "workspace".into(),
+            serde_json::json!(
+                runtime
+                    .display_path(&runtime.dotted_dir)
+                    .display()
+                    .to_string()
+            ),
+        );
+        if show("artifacts") {
+            output.insert(
+                "artifacts".into(),
+                serde_json::json!(
+                    plan.artifacts
+                        .iter()
+                        .map(|item| serde_json::json!({
+                            "id": item.id,
+                            "name": item.name,
+                            "revision": item.revision,
+                            "description": item.description,
+                        }))
+                        .collect::<Vec<_>>()
+                ),
+            );
+        }
+        if show("files") {
+            let mut files = Vec::new();
+            for file in &plan.files {
+                let change = match files::classify(file)? {
+                    Some(FileChange::Changed) => "change",
+                    Some(FileChange::New) => "new",
+                    None => continue,
+                };
+                files.push(serde_json::json!({
+                    "artifact": file.artifact_id,
+                    "status": change,
+                    "source": runtime.display_path(&file.source).display().to_string(),
+                    "target": runtime.display_path(&file.display_target).display().to_string(),
+                }));
+            }
+            output.insert("files".into(), serde_json::json!(files));
+        }
+        if show("env") {
+            let env = plan
+                .artifacts
+                .iter()
+                .flat_map(|artifact| {
+                    artifact.bin.env.iter().map(|(key, value)| {
+                        serde_json::json!({"artifact": artifact.id, "key": key, "value": value})
+                    })
+                })
+                .collect::<Vec<_>>();
+            output.insert("env".into(), serde_json::json!(env));
+        }
+        if show("packages") {
+            let mut packages = Vec::new();
+            for artifact in &plan.artifacts {
+                for (distro, set) in &artifact.bin.distro {
+                    for name in &set.packages {
+                        packages.push(serde_json::json!({
+                            "artifact": artifact.id,
+                            "manager": distro,
+                            "name": name,
+                            "installed": crate::utils::is_package_installed(distro, name),
+                        }));
+                    }
+                }
+                for name in &artifact.bin.flatpak.packages {
+                    packages.push(serde_json::json!({
+                        "artifact": artifact.id,
+                        "manager": "flatpak",
+                        "name": name,
+                        "installed": crate::utils::is_flatpak_installed(name),
+                    }));
+                }
+            }
+            output.insert("packages".into(), serde_json::json!(packages));
+        }
+        if show("services") {
+            let services = plan
+                .artifacts
+                .iter()
+                .flat_map(|artifact| {
+                    artifact.bin.services.iter().flat_map(move |(scope, set)| {
+                        set.units.iter().map(move |unit| {
+                            serde_json::json!({
+                                "artifact": artifact.id,
+                                "scope": scope,
+                                "unit": unit,
+                                "enabled": crate::utils::is_service_enabled(scope, unit),
+                                "active": crate::utils::is_service_active(scope, unit),
+                            })
+                        })
+                    })
+                })
+                .collect::<Vec<_>>();
+            output.insert("services".into(), serde_json::json!(services));
+        }
+        if show("downloads") {
+            let downloads = plan
+                .downloads
+                .iter()
+                .map(|download| {
+                    let (url, archive_entry) = match &download.source {
+                        crate::types::DownloadSource::Url(url) => (url.as_str(), ""),
+                        crate::types::DownloadSource::Zip { url, path } => {
+                            (url.as_str(), path.as_str())
+                        }
+                    };
+                    let install = match download.install {
+                        crate::types::DownloadInstall::Local => "local",
+                        crate::types::DownloadInstall::System => "system",
+                    };
+                    serde_json::json!({
+                        "artifact": download.artifact_id,
+                        "url": url,
+                        "archive_entry": archive_entry,
+                        "path": runtime.display_path(&download.display_path).display().to_string(),
+                        "install": install,
+                        "installed": download.install_path.exists(),
+                    })
+                })
+                .collect::<Vec<_>>();
+            output.insert("downloads".into(), serde_json::json!(downloads));
+        }
+        return crate::utils::output::print_structured(format, &output);
+    }
 
     println!("device: {}", runtime.device);
     println!("user: {}", runtime.user);

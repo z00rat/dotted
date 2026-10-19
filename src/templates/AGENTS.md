@@ -90,6 +90,9 @@ It does not run package managers, download commands, or `systemctl` changes.
 - `dotted deploy diff [id]` shows file differences.
 - `dotted deploy orphans` reports unclaimed packages, binaries, and services.
 - `dotted workspace doctor` checks workspace configuration and required tools.
+- For structured output, `artifact list`, `deploy status`, `deploy orphans`,
+  `workspace doctor`, and `backup list` accept `--format json|toml|toon`.
+  Structured results are objects with `schema_version` set to `1`.
 
 Before finishing, report the files changed, checks run, and any suggested
 package, download, or service commands for the user to review.

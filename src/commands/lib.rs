@@ -473,6 +473,8 @@ pub(crate) fn check_remote_reachability(
     label: &str,
     problems: &mut usize,
     filter: Option<&str>,
+    silent: bool,
+    report: &mut Vec<serde_json::Value>,
 ) {
     if !dir.join(".git").exists() {
         return;
@@ -484,10 +486,19 @@ pub(crate) fn check_remote_reachability(
             true
         }
     };
-    let log = |prefix: &str, text: &str| {
+    let log = |prefix: &str, text: &str, report: &mut Vec<serde_json::Value>| {
         let line = format!("{prefix} {text}");
         if matches_filter(&line) {
-            println!("{line}");
+            if silent {
+                let status = if prefix.contains("bad") {
+                    "error"
+                } else {
+                    "ok"
+                };
+                report.push(serde_json::json!({"status": status, "message": text}));
+            } else {
+                println!("{line}");
+            }
         }
     };
 
@@ -502,6 +513,7 @@ pub(crate) fn check_remote_reachability(
                 log(
                     "",
                     &format!("checking remote reachability for {label} ({remote})..."),
+                    report,
                 );
                 let check = Command::new("git")
                     .args(["ls-remote", "--exit-code", "--heads", remote])
@@ -512,6 +524,7 @@ pub(crate) fn check_remote_reachability(
                         log(
                             &style("ok", "32", runtime),
                             &format!("remote {label} ({remote})"),
+                            report,
                         );
                     }
                     _ => {
@@ -519,6 +532,7 @@ pub(crate) fn check_remote_reachability(
                         log(
                             &style("bad", "31", runtime),
                             &format!("remote reachability for {label} ({remote})"),
+                            report,
                         );
                     }
                 }
@@ -526,7 +540,11 @@ pub(crate) fn check_remote_reachability(
         }
         Err(e) => {
             *problems += 1;
-            log("", &format!("failed to check remotes for {label}: {e}"));
+            log(
+                "",
+                &format!("failed to check remotes for {label}: {e}"),
+                report,
+            );
         }
     }
 }
@@ -536,6 +554,8 @@ pub(crate) fn check_tool(
     tool: &str,
     problems: &mut usize,
     filter: Option<&str>,
+    silent: bool,
+    report: &mut Vec<serde_json::Value>,
 ) {
     let matches_filter = |s: &str| -> bool {
         if let Some(f) = filter {
@@ -544,17 +564,30 @@ pub(crate) fn check_tool(
             true
         }
     };
-    let log = |prefix: &str, text: &str| {
+    let log = |prefix: &str, text: &str, report: &mut Vec<serde_json::Value>| {
         let line = format!("{prefix} {text}");
         if matches_filter(&line) {
-            println!("{line}");
+            if silent {
+                let status = if prefix.contains("missing") {
+                    "error"
+                } else {
+                    "ok"
+                };
+                report.push(serde_json::json!({"status": status, "message": text}));
+            } else {
+                println!("{line}");
+            }
         }
     };
 
     if crate::utils::command_exists(tool) {
-        log(&style("ok", "32", runtime), &format!("tool {tool}"));
+        log(&style("ok", "32", runtime), &format!("tool {tool}"), report);
     } else {
         *problems += 1;
-        log(&style("missing", "31", runtime), &format!("tool {tool}"));
+        log(
+            &style("missing", "31", runtime),
+            &format!("tool {tool}"),
+            report,
+        );
     }
 }

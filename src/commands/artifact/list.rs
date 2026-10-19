@@ -12,12 +12,20 @@
 /// - If `raw` is true, outputs raw IDs and exits.
 /// - Determines the artifact's enabling status ([enabled] or [disabled]) by checking if it exists in the settings' `enable` list and is not in the `disable` list.
 /// - Formats the output inside a dynamic table if `raw` is false, applying terminal colors if enabled.
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, bail};
+
+use crate::cli::OutputFormat;
 
 use crate::plan::{discover_artifacts, load_settings};
 use crate::types::Runtime;
 
-pub fn run(runtime: &Runtime, filter: Option<&str>, raw: bool, state: Option<&str>) -> Result<()> {
+pub fn run(
+    runtime: &Runtime,
+    filter: Option<&str>,
+    raw: bool,
+    state: Option<&str>,
+    format: &OutputFormat,
+) -> Result<()> {
     let matches_filter = |s: &str| -> bool {
         if let Some(f) = filter {
             s.to_lowercase().contains(&f.to_lowercase())
@@ -39,6 +47,33 @@ pub fn run(runtime: &Runtime, filter: Option<&str>, raw: bool, state: Option<&st
         })
         .cloned()
         .collect::<Vec<_>>();
+
+    if !matches!(format, OutputFormat::Human) {
+        if raw {
+            bail!("--raw cannot be combined with --format");
+        }
+        let items = artifacts
+            .iter()
+            .map(|art| {
+                let enabled =
+                    settings.enable.contains(&art.id) && !settings.disable.contains(&art.id);
+                serde_json::json!({
+                    "id": art.id,
+                    "name": art.name,
+                    "repository": art.repo,
+                    "enabled": enabled,
+                    "revision": art.revision,
+                    "description": art.description,
+                })
+            })
+            .collect::<Vec<_>>();
+        return crate::utils::output::print_structured(
+            format,
+            &serde_json::json!({
+                "artifacts": items,
+            }),
+        );
+    }
 
     if raw {
         for art in artifacts {

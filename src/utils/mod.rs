@@ -1,6 +1,7 @@
 pub(crate) mod formatting;
 pub(crate) mod fs;
 pub(crate) mod ignore;
+pub(crate) mod output;
 pub(crate) mod plan;
 pub(crate) mod shell;
 pub(crate) mod status_color;

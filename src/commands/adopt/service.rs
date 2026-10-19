@@ -1,11 +1,11 @@
-/// CLI Command: `adopt service <artifact_id> [scope] <services...>`
+/// CLI Command: `adopt service <artifact_id> [--scope user|system] <services...>`
 ///
 /// What it does:
 /// Records systemd service unit names in an artifact's `[bin].toml` under `[services.user]` or `[services.system]`.
 ///
 /// Variations:
-/// 1. `scope` provided: Uses explicit scope (`user` or `system`).
-/// 2. `scope` omitted: Prompts interactively when in TUI mode or defaults to `user` scope.
+/// 1. `--scope` provided: Uses explicit scope (`user` or `system`).
+/// 2. `--scope` omitted: Prompts interactively when in TUI mode or defaults to `user` scope.
 ///
 /// Decisions & Logic Branches:
 /// - Verifies that the target artifact directory exists in the workspace.

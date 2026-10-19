@@ -100,6 +100,15 @@ pub(crate) enum ServiceScope {
     System,
 }
 
+#[derive(Clone, Debug, Default, ValueEnum)]
+pub(crate) enum OutputFormat {
+    #[default]
+    Human,
+    Json,
+    Toml,
+    Toon,
+}
+
 macro_rules! as_str {
     ($type:ty, {$($variant:ident => $value:literal),+ $(,)?}) => {
         impl $type {
@@ -155,6 +164,8 @@ pub(crate) enum WorkspaceCommands {
     Doctor {
         #[arg(help = "Check category")]
         category: Option<DoctorCategory>,
+        #[arg(long, value_enum, default_value = "human", help = "Output format")]
+        format: OutputFormat,
     },
     #[command(about = "Format all dotted TOML configuration files in the workspace")]
     Format,
@@ -166,6 +177,8 @@ pub(crate) enum ArtifactCommands {
     List {
         #[arg(short, long, help = "Filter results by repo, name or description")]
         filter: Option<String>,
+        #[arg(long, value_enum, default_value = "human", help = "Output format")]
+        format: OutputFormat,
         #[arg(long, hide = true)]
         raw: bool,
         #[arg(long, hide = true)]
@@ -249,6 +262,8 @@ pub(crate) enum DeployCommands {
         artifact: Option<String>,
         #[arg(short, long, help = "Status category")]
         filter: Option<StatusFilter>,
+        #[arg(long, value_enum, default_value = "human", help = "Output format")]
+        format: OutputFormat,
     },
     #[command(about = "Show differences between rendered files and active system files")]
     Diff {
@@ -263,6 +278,8 @@ pub(crate) enum DeployCommands {
     Orphans {
         #[arg(short, long, help = "Category")]
         filter: Option<OrphanFilter>,
+        #[arg(long, value_enum, default_value = "human", help = "Output format")]
+        format: OutputFormat,
     },
 }
 
@@ -373,6 +390,8 @@ pub(crate) enum BackupCommands {
             help = "Filter paths in the selected snapshot"
         )]
         filter: Option<PathBuf>,
+        #[arg(long, value_enum, default_value = "human", help = "Output format")]
+        format: OutputFormat,
     },
     #[command(
         about = "Restore files from a backup snapshot",

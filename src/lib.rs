@@ -41,18 +41,25 @@ fn run_with_cli(cli: Cli) -> Result<()> {
             WorkspaceCommands::Pull => commands::workspace::pull::run(&runtime),
             WorkspaceCommands::Push => commands::workspace::push::run(&runtime),
             WorkspaceCommands::Cd => commands::workspace::cd::run(&runtime),
-            WorkspaceCommands::Doctor { category } => commands::workspace::doctor::run(
+            WorkspaceCommands::Doctor { category, format } => commands::workspace::doctor::run(
                 &runtime,
                 category.as_ref().map(crate::cli::DoctorCategory::as_str),
+                &format,
             ),
             WorkspaceCommands::Format => commands::workspace::format::run(&runtime),
         },
         Commands::Artifact(sub) => match sub {
-            ArtifactCommands::List { filter, raw, state } => commands::artifact::list::run(
+            ArtifactCommands::List {
+                filter,
+                format,
+                raw,
+                state,
+            } => commands::artifact::list::run(
                 &runtime,
                 filter.as_deref(),
                 raw,
                 state.as_ref().map(crate::cli::ArtifactState::as_str),
+                &format,
             ),
             ArtifactCommands::Show { artifact } => {
                 commands::artifact::show::run(&runtime, &artifact)
@@ -96,18 +103,24 @@ fn run_with_cli(cli: Cli) -> Result<()> {
             ),
         },
         Commands::Deploy(sub) => match sub {
-            DeployCommands::Status { artifact, filter } => commands::deploy::status::run(
+            DeployCommands::Status {
+                artifact,
+                filter,
+                format,
+            } => commands::deploy::status::run(
                 &runtime,
                 artifact.as_deref(),
                 filter.as_ref().map(crate::cli::StatusFilter::as_str),
+                &format,
             ),
             DeployCommands::Diff { artifact } => {
                 commands::deploy::diff::run(&runtime, artifact.as_deref(), None)
             }
             DeployCommands::Apply(args) => commands::deploy::apply::run(&runtime, &args),
-            DeployCommands::Orphans { filter } => commands::deploy::orphans::run(
+            DeployCommands::Orphans { filter, format } => commands::deploy::orphans::run(
                 &runtime,
                 filter.as_ref().map(crate::cli::OrphanFilter::as_str),
+                &format,
             ),
         },
         Commands::Repo(sub) => match sub {
@@ -153,9 +166,16 @@ fn run_with_cli(cli: Cli) -> Result<()> {
             },
         },
         Commands::Backup(sub) => match sub {
-            BackupCommands::List { timestamp, filter } => {
-                commands::backup::list::run(&runtime, timestamp.as_deref(), filter.as_deref())
-            }
+            BackupCommands::List {
+                timestamp,
+                filter,
+                format,
+            } => commands::backup::list::run(
+                &runtime,
+                timestamp.as_deref(),
+                filter.as_deref(),
+                &format,
+            ),
             BackupCommands::Restore { timestamp, path } => {
                 commands::backup::restore::run(&runtime, &timestamp, path.as_deref())
             }

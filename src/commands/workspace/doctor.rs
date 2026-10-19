@@ -18,6 +18,7 @@
 use color_eyre::eyre::{Result, WrapErr, bail};
 use std::fs;
 
+use crate::cli::OutputFormat;
 use crate::commands::lib::{
     artifact_dirs_without_about, check_remote_reachability, check_tool, configured_repos,
     control_toml_paths, load_dotted,
@@ -26,7 +27,13 @@ use crate::plan::{build_plan, discover_artifacts, load_settings};
 use crate::types::Runtime;
 use crate::utils::style;
 
-fn log(prefix: &str, text: &str, filter: Option<&str>) {
+fn log(
+    prefix: &str,
+    text: &str,
+    filter: Option<&str>,
+    format: &OutputFormat,
+    checks: &mut Vec<serde_json::Value>,
+) {
     let line = format!("{prefix} {text}");
     let matches = if let Some(f) = filter {
         line.to_lowercase().contains(&f.to_lowercase())
@@ -34,11 +41,30 @@ fn log(prefix: &str, text: &str, filter: Option<&str>) {
         true
     };
     if matches {
-        println!("{line}");
+        if matches!(format, OutputFormat::Human) {
+            println!("{line}");
+        } else {
+            let status = if prefix.contains("bad") || prefix.contains("missing") {
+                "error"
+            } else if prefix.contains("info") {
+                "warning"
+            } else if prefix.trim().is_empty() {
+                "info"
+            } else {
+                "ok"
+            };
+            checks.push(serde_json::json!({"status": status, "message": text}));
+        }
     }
 }
 
-fn check_toml_files(runtime: &Runtime, problems: &mut usize, filter: Option<&str>) {
+fn check_toml_files(
+    runtime: &Runtime,
+    problems: &mut usize,
+    filter: Option<&str>,
+    format: &OutputFormat,
+    checks: &mut Vec<serde_json::Value>,
+) {
     for path in control_toml_paths(runtime) {
         let path_str = runtime.display_path(&path).display().to_string();
         match fs::read_to_string(&path)
@@ -51,6 +77,8 @@ fn check_toml_files(runtime: &Runtime, problems: &mut usize, filter: Option<&str
                 &style("ok", "32", runtime),
                 &format!("toml {path_str}"),
                 filter,
+                format,
+                checks,
             ),
             Err(error) => {
                 *problems += 1;
@@ -58,13 +86,21 @@ fn check_toml_files(runtime: &Runtime, problems: &mut usize, filter: Option<&str
                     &style("bad", "31", runtime),
                     &format!("toml {path_str}: {error:#}"),
                     filter,
+                    format,
+                    checks,
                 );
             }
         }
     }
 }
 
-fn check_repos(runtime: &Runtime, problems: &mut usize, filter: Option<&str>) -> Result<()> {
+fn check_repos(
+    runtime: &Runtime,
+    problems: &mut usize,
+    filter: Option<&str>,
+    format: &OutputFormat,
+    checks: &mut Vec<serde_json::Value>,
+) -> Result<()> {
     let dotted = load_dotted(runtime)?;
     for repo in configured_repos(&dotted) {
         let path = runtime.dotted_dir.join(&repo.name);
@@ -73,6 +109,8 @@ fn check_repos(runtime: &Runtime, problems: &mut usize, filter: Option<&str>) ->
                 &style("ok", "32", runtime),
                 &format!("repo {} {}", repo.name, path.display()),
                 filter,
+                format,
+                checks,
             );
             check_remote_reachability(
                 runtime,
@@ -80,6 +118,8 @@ fn check_repos(runtime: &Runtime, problems: &mut usize, filter: Option<&str>) ->
                 &format!("repo {}", repo.name),
                 problems,
                 filter,
+                !matches!(format, OutputFormat::Human),
+                checks,
             );
         } else {
             *problems += 1;
@@ -87,13 +127,21 @@ fn check_repos(runtime: &Runtime, problems: &mut usize, filter: Option<&str>) ->
                 &style("missing", "31", runtime),
                 &format!("repo {} {}", repo.name, path.display()),
                 filter,
+                format,
+                checks,
             );
         }
     }
     Ok(())
 }
 
-fn check_plan_tools(runtime: &Runtime, problems: &mut usize, filter: Option<&str>) {
+fn check_plan_tools(
+    runtime: &Runtime,
+    problems: &mut usize,
+    filter: Option<&str>,
+    format: &OutputFormat,
+    checks: &mut Vec<serde_json::Value>,
+) {
     let plan = build_plan(runtime, None).ok();
     if let Some(plan) = plan {
         for distro in plan.packages.keys() {
@@ -104,26 +152,60 @@ fn check_plan_tools(runtime: &Runtime, problems: &mut usize, filter: Option<&str
                 _ => "",
             };
             if !tool.is_empty() {
-                check_tool(runtime, tool, problems, filter);
+                check_tool(
+                    runtime,
+                    tool,
+                    problems,
+                    filter,
+                    !matches!(format, OutputFormat::Human),
+                    checks,
+                );
             }
         }
         if !plan.flatpaks.is_empty() {
-            check_tool(runtime, "flatpak", problems, filter);
+            check_tool(
+                runtime,
+                "flatpak",
+                problems,
+                filter,
+                !matches!(format, OutputFormat::Human),
+                checks,
+            );
         }
         if !plan.downloads.is_empty() {
-            check_tool(runtime, "curl", problems, filter);
+            check_tool(
+                runtime,
+                "curl",
+                problems,
+                filter,
+                !matches!(format, OutputFormat::Human),
+                checks,
+            );
             if plan
                 .downloads
                 .iter()
                 .any(|download| matches!(download.source, crate::types::DownloadSource::Zip { .. }))
             {
-                check_tool(runtime, "unzip", problems, filter);
+                check_tool(
+                    runtime,
+                    "unzip",
+                    problems,
+                    filter,
+                    !matches!(format, OutputFormat::Human),
+                    checks,
+                );
             }
         }
     }
 }
 
-fn check_file_permissions(runtime: &Runtime, problems: &mut usize, filter: Option<&str>) {
+fn check_file_permissions(
+    runtime: &Runtime,
+    problems: &mut usize,
+    filter: Option<&str>,
+    format: &OutputFormat,
+    checks: &mut Vec<serde_json::Value>,
+) {
     if !runtime.dotted_dir.exists() {
         return;
     }
@@ -148,6 +230,8 @@ fn check_file_permissions(runtime: &Runtime, problems: &mut usize, filter: Optio
             &style("ok", "32", runtime),
             "workspace file ownership",
             filter,
+            format,
+            checks,
         );
         return;
     }
@@ -160,12 +244,16 @@ fn check_file_permissions(runtime: &Runtime, problems: &mut usize, filter: Optio
                 root_owned_paths.len()
             ),
             filter,
+            format,
+            checks,
         );
         if crate::utils::chown_path_tree_if_root(runtime, &runtime.dotted_dir).is_ok() {
             log(
                 &style("ok", "32", runtime),
                 "fixed root ownership on workspace files",
                 filter,
+                format,
+                checks,
             );
         } else {
             *problems += 1;
@@ -173,6 +261,8 @@ fn check_file_permissions(runtime: &Runtime, problems: &mut usize, filter: Optio
                 &style("bad", "31", runtime),
                 "failed to fix root ownership on workspace files",
                 filter,
+                format,
+                checks,
             );
         }
     } else {
@@ -184,13 +274,16 @@ fn check_file_permissions(runtime: &Runtime, problems: &mut usize, filter: Optio
                 root_owned_paths.len()
             ),
             filter,
+            format,
+            checks,
         );
     }
 }
 
-pub fn run(runtime: &Runtime, filter: Option<&str>) -> Result<()> {
+pub fn run(runtime: &Runtime, filter: Option<&str>, format: &OutputFormat) -> Result<()> {
     let enabled = |name: &str| filter.is_none_or(|f| f == name);
     let mut problems = 0usize;
+    let mut checks = Vec::new();
 
     log(
         "",
@@ -199,11 +292,13 @@ pub fn run(runtime: &Runtime, filter: Option<&str>) -> Result<()> {
             runtime.display_path(&runtime.dotted_dir).display()
         ),
         None,
+        format,
+        &mut checks,
     );
 
     if enabled("config") {
-        check_toml_files(runtime, &mut problems, None);
-        check_file_permissions(runtime, &mut problems, None);
+        check_toml_files(runtime, &mut problems, None, format, &mut checks);
+        check_file_permissions(runtime, &mut problems, None, format, &mut checks);
     }
 
     if enabled("repo") {
@@ -213,11 +308,13 @@ pub fn run(runtime: &Runtime, filter: Option<&str>) -> Result<()> {
             "Dotted repository",
             &mut problems,
             None,
+            !matches!(format, OutputFormat::Human),
+            &mut checks,
         );
     }
 
     if enabled("repo") {
-        check_repos(runtime, &mut problems, None)?;
+        check_repos(runtime, &mut problems, None, format, &mut checks)?;
     }
 
     let artifacts = discover_artifacts(runtime)?;
@@ -231,29 +328,53 @@ pub fn run(runtime: &Runtime, filter: Option<&str>) -> Result<()> {
                     dir.display()
                 ),
                 None,
+                format,
+                &mut checks,
             );
         }
         let settings = load_settings(runtime)?;
         for id in &settings.enable {
             if artifacts.contains_key(id) {
-                log(&style("ok", "32", runtime), &format!("enabled {id}"), None);
+                log(
+                    &style("ok", "32", runtime),
+                    &format!("enabled {id}"),
+                    None,
+                    format,
+                    &mut checks,
+                );
             } else {
                 problems += 1;
                 log(
                     &style("missing", "31", runtime),
                     &format!("enabled artifact {id}"),
                     None,
+                    format,
+                    &mut checks,
                 );
             }
         }
     }
 
     if enabled("tool") {
-        check_plan_tools(runtime, &mut problems, None);
+        check_plan_tools(runtime, &mut problems, None, format, &mut checks);
     }
 
     if problems == 0 {
-        log("", &style("Doctor: ok", "32", runtime), None);
+        log(
+            "",
+            &style("Doctor: ok", "32", runtime),
+            None,
+            format,
+            &mut checks,
+        );
+    }
+    if !matches!(format, OutputFormat::Human) {
+        crate::utils::output::print_structured(
+            format,
+            &serde_json::json!({"ok": problems == 0, "problems": problems, "checks": checks}),
+        )?;
+    }
+    if problems == 0 {
         Ok(())
     } else {
         bail!("doctor found {problems} problem(s)")
